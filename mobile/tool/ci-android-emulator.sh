@@ -16,14 +16,16 @@ if [ ! -x "$T/avdmanager" ]; then
   SUDO=""; [ -w "$SDK/cmdline-tools" ] || SUDO=sudo
   $SUDO mkdir -p "$SDK/cmdline-tools" && $SUDO rm -rf "$SDK/cmdline-tools/ci" && $SUDO mv /tmp/clt/cmdline-tools "$SDK/cmdline-tools/ci"
 fi
-export ANDROID_HOME="$SDK" ANDROID_SDK_ROOT="$SDK"
+export ANDROID_HOME="$SDK" ANDROID_SDK_ROOT="$SDK" ANDROID_AVD_HOME="$HOME/.android/avd"
+mkdir -p "$ANDROID_AVD_HOME"
 yes | "$T/sdkmanager" --sdk_root="$SDK" --licenses >/dev/null || true
 "$T/sdkmanager" --sdk_root="$SDK" --install emulator platform-tools "$IMAGE" >/dev/null
-if ! echo no | "$T/avdmanager" create avd --force -n test -k "$IMAGE" -d "$PROFILE"; then
+if ! echo no | "$T/avdmanager" create avd --force -n test -k "$IMAGE" -d "$PROFILE" -p "$ANDROID_AVD_HOME/test.avd"; then
   echo "Could not make the emulator. Installed system images and known phone profiles:"
   ls "$SDK/system-images/android-$API/google_apis" || true; "$T/avdmanager" list device -c; exit 1
 fi
-CFG="$HOME/.android/avd/test.avd/config.ini"
+CFG="$ANDROID_AVD_HOME/test.avd/config.ini"
+[ -f "$CFG" ] || { echo "No emulator settings at $CFG:"; find "$HOME/.android" -maxdepth 3 | head -20; exit 1; }
 sed -i '/^hw.ramSize/d;/^disk.dataPartition.size/d;/^hw.keyboard/d' "$CFG"
 printf 'hw.ramSize=4096\ndisk.dataPartition.size=6000M\nhw.keyboard=no\n' >> "$CFG"
 nohup "$SDK/emulator/emulator" -avd test -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot \
