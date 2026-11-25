@@ -6,17 +6,22 @@ set -euo pipefail
 API="$1"; PROFILE="$2"
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
 IMAGE="system-images;android-$API;google_apis;x86_64"
-T=/tmp/clt/cmdline-tools/bin
+# The tools find the SDK from where they are installed, so they go inside it.
+T="$SDK/cmdline-tools/ci/bin"
 if [ ! -x "$T/avdmanager" ]; then
   for build in 13114758 12700392 12266719 11076708; do
     curl -fsSLo /tmp/clt.zip "https://dl.google.com/android/repository/commandlinetools-linux-${build}_latest.zip" && break
   done
   rm -rf /tmp/clt && unzip -q /tmp/clt.zip -d /tmp/clt
+  SUDO=""; [ -w "$SDK/cmdline-tools" ] || SUDO=sudo
+  $SUDO mkdir -p "$SDK/cmdline-tools" && $SUDO rm -rf "$SDK/cmdline-tools/ci" && $SUDO mv /tmp/clt/cmdline-tools "$SDK/cmdline-tools/ci"
 fi
+export ANDROID_HOME="$SDK" ANDROID_SDK_ROOT="$SDK"
 yes | "$T/sdkmanager" --sdk_root="$SDK" --licenses >/dev/null || true
 "$T/sdkmanager" --sdk_root="$SDK" --install emulator platform-tools "$IMAGE" >/dev/null
 if ! echo no | "$T/avdmanager" create avd --force -n test -k "$IMAGE" -d "$PROFILE"; then
-  echo "Unknown phone profile '$PROFILE'. Known profiles:"; "$T/avdmanager" list device -c; exit 1
+  echo "Could not make the emulator. Installed system images and known phone profiles:"
+  ls "$SDK/system-images/android-$API/google_apis" || true; "$T/avdmanager" list device -c; exit 1
 fi
 CFG="$HOME/.android/avd/test.avd/config.ini"
 sed -i '/^hw.ramSize/d;/^disk.dataPartition.size/d;/^hw.keyboard/d' "$CFG"
