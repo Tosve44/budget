@@ -346,13 +346,21 @@ final class BudgetUITests: XCTestCase {
         app.buttons["Cancel"].tap()
     }
 
+    /// Opens Settings and scrolls to the Look switch (below the fold on a small iPhone).
+    func appearancePicker() -> XCUIElement {
+        tab("Settings")
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        let picker = app.segmentedControls["appearancePicker"]
+        if !picker.waitForExistence(timeout: 2) || !picker.isHittable { scrollTo(picker) }
+        XCTAssertTrue(picker.waitForExistence(timeout: 5), "Look switch shown")
+        return picker
+    }
+
     func testLightAndDarkCanBeChosenInSettings() {
         XCUIDevice.shared.appearance = .dark
         defer { XCUIDevice.shared.appearance = .light }
         launch(["-demo-data"])
-        tab("Settings")
-        let picker = app.segmentedControls["appearancePicker"]
-        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        var picker = appearancePicker()
         XCTAssertTrue(picker.buttons["Automatic"].isSelected, "follows the iPhone by default")
         picker.buttons["Light"].tap()
         XCTAssertTrue(picker.buttons["Light"].isSelected)
@@ -361,17 +369,14 @@ final class BudgetUITests: XCTestCase {
         app.terminate()
         app.launchArguments.append("-keep-appearance")
         app.launch()
-        tab("Settings")
-        XCTAssertTrue(app.segmentedControls["appearancePicker"].buttons["Light"].isSelected, "remembered")
-        app.segmentedControls["appearancePicker"].buttons["Dark"].tap()
-        XCTAssertTrue(app.segmentedControls["appearancePicker"].buttons["Dark"].isSelected)
+        picker = appearancePicker()
+        XCTAssertTrue(picker.buttons["Light"].isSelected, "remembered")
+        picker.buttons["Dark"].tap()
+        XCTAssertTrue(picker.buttons["Dark"].isSelected)
         tour("chosen dark")
-        // The tour ends on Personal, so go back to Settings to switch back.
-        tab("Settings")
-        let again = app.segmentedControls["appearancePicker"]
-        XCTAssertTrue(again.waitForExistence(timeout: 5))
-        again.buttons["Automatic"].tap()
-        XCTAssertTrue(again.buttons["Automatic"].isSelected)
+        picker = appearancePicker()
+        picker.buttons["Automatic"].tap()
+        XCTAssertTrue(picker.buttons["Automatic"].isSelected)
     }
 
     func testVeryLargeText() {
