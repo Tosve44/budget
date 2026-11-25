@@ -1,24 +1,33 @@
 import Foundation
 
 public enum Money {
-    /// Turns typed or printed money into cents. Accepts "12,50", "12.50", "1.299,00", "1,299.00", "7".
-    /// The last "," or "." is the decimal point. Returns nil for anything that is not a number.
-    /// Same rules as `toCents` in the web app.
+    /// Turns typed or printed money into cents. Accepts "12,50", "12.50", "1.299,00", "1,299.00", "7",
+    /// "12,50 €". The last "," or "." is the decimal point, except a dot followed by exactly three
+    /// digits, which is the Slovenian thousands separator ("1.000" is one thousand euros).
+    /// Anything else (minus signs, "1e5", letters) is refused with nil.
+    /// Exactly the rules of `toCents` in the web app's store.js (checked by the golden tests).
     public static func cents(_ input: String) -> Int? {
-        let s = String(input.unicodeScalars.filter { !CharacterSet.whitespacesAndNewlines.contains($0) })
-        if s.isEmpty { return nil }
+        // Spaces (also the narrow ones some keyboards insert) and apostrophes ("1'000") go.
+        var s = input.replacingOccurrences(of: ReceiptParser.S, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "'", with: "")
+        // The first "€", or "eur" at the very end (any case), whichever comes first.
+        if let r = s.range(of: #"€|[eE][uU][rR]$"#, options: .regularExpression) { s.removeSubrange(r) }
+        guard s.range(of: #"^[0-9][0-9.,]*$|^[.,][0-9]+$"#, options: .regularExpression) != nil else { return nil }
         let normalized: String
         if let lastSep = s.lastIndex(where: { $0 == "," || $0 == "." }) {
             let intPart = s[..<lastSep].filter { $0 != "," && $0 != "." }
-            let frac = s[s.index(after: lastSep)...]
-            normalized = "\(intPart).\(frac)"
+            let frac = String(s[s.index(after: lastSep)...])
+            let mixed = s.contains(",") && s.contains(".")
+            if s[lastSep] == ".", frac.count == 3, !mixed, !intPart.isEmpty, intPart.contains(where: { $0 != "0" }) {
+                normalized = intPart + frac
+            } else {
+                normalized = "\(intPart.isEmpty ? "0" : intPart).\(frac.isEmpty ? "0" : frac)"
+            }
         } else {
             normalized = s
         }
-        // Only plain decimal numbers (the web app's Number() would also take "0x10" or "1e3";
-        // nobody types those for money, so they are refused here).
-        guard normalized.range(of: #"^[+-]?(\d+\.?\d*|\.\d+)$"#, options: .regularExpression) != nil,
-              let n = Double(normalized), n.isFinite else { return nil }
+        // Absurdly long numbers are refused instead of overflowing (the limits refuse them anyway).
+        guard let n = Double(normalized), n.isFinite, n < 1e15 else { return nil }
         return cents(n)
     }
 

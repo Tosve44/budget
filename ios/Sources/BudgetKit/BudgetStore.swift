@@ -180,9 +180,20 @@ public final class BudgetStore {
     }
 
     @discardableResult
+    /// True when a visible category of that kind in that space already has this name (ignoring
+    /// case and spaces at the ends). Such a name is refused, like in the web app.
+    public func categoryNameTaken(_ name: String, spaceId: String, kind: EntryKind, excluding id: String? = nil) -> Bool {
+        let key = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return data.categories.contains {
+            $0.id != id && !$0.archived && $0.spaceId == spaceId && $0.kind == kind
+                && $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == key
+        }
+    }
+
     public func addCategory(spaceId: String, name: String, kind: EntryKind, budget: Int = 0) -> Category {
         let order = (data.categories.map(\.order).max() ?? -1) + 1
-        let c = Category(id: IDs.make("cat"), spaceId: spaceId, name: name, kind: kind, budget: budget, order: order,
+        let c = Category(id: IDs.make("cat"), spaceId: spaceId, name: Limits.clip(name, Limits.categoryName), kind: kind,
+                         budget: min(max(budget, 0), Limits.maxCents), order: order,
                          updatedAt: DateKey.timestamp(now()))
         data.categories.append(c)
         changed(.categories, c.id)
@@ -192,8 +203,8 @@ public final class BudgetStore {
 
     public func updateCategory(_ id: String, name: String? = nil, budget: Int? = nil, archived: Bool? = nil) {
         guard let i = data.categories.firstIndex(where: { $0.id == id }) else { return }
-        if let name { data.categories[i].name = name }
-        if let budget { data.categories[i].budget = budget }
+        if let name { data.categories[i].name = Limits.clip(name, Limits.categoryName) }
+        if let budget { data.categories[i].budget = min(max(budget, 0), Limits.maxCents) }
         if let archived { data.categories[i].archived = archived }
         data.categories[i].updatedAt = DateKey.timestamp(now())
         changed(.categories, id)

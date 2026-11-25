@@ -289,9 +289,14 @@ struct CategoryEditor: View {
     func save() {
         let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !n.isEmpty else { problem = "Enter a name."; return }
+        guard !model.store.categoryNameTaken(n, spaceId: spaceId, kind: kind, excluding: category?.id) else {
+            problem = "There is already a category called \"\(n)\"."; return
+        }
+        guard n.unicodeScalars.count <= Limits.categoryName else { problem = "The name is too long (at most \(Limits.categoryName) characters)."; return }
         let trimmed = budgetText.trimmingCharacters(in: .whitespaces)
         let budget = trimmed.isEmpty ? 0 : Money.cents(trimmed)
         guard let budget, budget >= 0 else { problem = "The budget must be a number."; return }
+        guard budget <= Limits.maxCents else { problem = "That budget is too big."; return }
         if let c = category {
             model.store.updateCategory(c.id, name: n, budget: kind == .expense ? budget : nil)
         } else {

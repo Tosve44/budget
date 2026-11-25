@@ -62,14 +62,17 @@ for (let i = 0; i < 4000; i++) {
 writeFileSync(`${out}/receipts.json`, JSON.stringify(receipts));
 
 // ---------- money typing ----------
-const chars = '0123456789,.,. -+abc€';
+const chars = "0123456789,.,.000 -+abceErRuU€'\u00a0\u202fe";
 const money = [];
 for (let i = 0; i < 4000; i++) {
   const s = Array.from({ length: int(0, 9) }, () => pick(chars)).join('');
   const v = store.toCents(s);
   money.push({ input: s, cents: Number.isFinite(v) ? v : null });
 }
-for (const s of ['12', '12,5', '12.50', '0,99', '1.299,00', '1,299.00', ' 7 ', '', 'abc', '0.1', '0.2', '1,15', '2,675', '-0,30', '5.', ',5', '.', '1.005', '19,99', '0,005']) {
+for (const s of ['12', '12,5', '12.50', '0,99', '1.299,00', '1,299.00', ' 7 ', '', 'abc', '0.1', '0.2', '1,15', '2,675', '-0,30', '5.', ',5', '.', '1.005', '19,99', '0,005',
+  '1.000', '1.000.000', '12.500,50', '0.500', '00.500', '.500', '1.0000', '1e5', '1E5', '0x10', '+5', 'Infinity', 'NaN',
+  '12,50 €', '€12,50', '12,50 EUR', '12,50eur', 'eur12', '€ 1.000', "1'000", '1\u00a0000,50', '1\u202f000', '12,50 €€',
+  '9999999,99', '10000000', '1,2,3', '1..2', ',', '.,', '0', '0,00']) {
   const v = store.toCents(s);
   money.push({ input: s, cents: Number.isFinite(v) ? v : null });
 }

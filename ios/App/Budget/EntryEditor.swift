@@ -13,6 +13,7 @@ struct EntryEditor: View {
     @State private var reading = false
     @State private var readNote: String?
     @State private var confirmDelete = false
+    @State private var savedAsNew = false
     @FocusState private var amountFocused: Bool
     let isNew: Bool
 
@@ -75,6 +76,11 @@ struct EntryEditor: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save", action: save).bold().accessibilityIdentifier("saveEntry")
                 }
+            }
+            .alert("Saved as a new entry", isPresented: $savedAsNew) {
+                Button("OK") { dismiss() }
+            } message: {
+                Text("This entry was deleted on the other phone while you were changing it, so your version was added again.")
             }
             .confirmationDialog("Delete this entry?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) {
@@ -199,8 +205,9 @@ struct EntryEditor: View {
 
     func save() {
         do {
+            let deletedMeanwhile = draft.wasDeletedMeanwhile(in: model.store)
             try draft.save(to: model.store)
-            dismiss()
+            if deletedMeanwhile { savedAsNew = true } else { dismiss() }
         } catch {
             problem = error.localizedDescription
         }

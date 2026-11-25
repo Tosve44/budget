@@ -173,7 +173,9 @@ struct SummaryCard: View {
                             .accessibilityIdentifier("leftAmount")
                     }
                     Spacer()
-                    Text("\(Int((Double(sum.spent) / Double(sum.budget) * 100).rounded()))% used").foregroundStyle(.secondary)
+                    Text("\(Int((Double(sum.spent) / Double(sum.budget) * 100).rounded()))% of \(model.money(sum.budget))")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("budgetUsed")
                 }
                 BudgetBar(spent: sum.spent, budget: sum.budget)
             } else {
@@ -184,8 +186,17 @@ struct SummaryCard: View {
             HStack {
                 addButton(.income, "Income", model.money(sum.income), Color.green)
                 addButton(.expense, "Spent", model.money(sum.spent), Color.primary)
-                stat("Budget", sum.budget > 0 ? model.money(sum.budget) : "–", Color.primary)
             }
+            let balance = sum.income - sum.spent
+            HStack {
+                Text("Balance").font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                Text((balance > 0 ? "+" : balance < 0 ? "−" : "") + model.money(abs(balance)))
+                    .font(.subheadline.weight(.semibold)).monospacedDigit()
+                    .foregroundStyle(balance < 0 ? Color.red : Color.primary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("balance")
         }
         .padding(.vertical, 4)
     }

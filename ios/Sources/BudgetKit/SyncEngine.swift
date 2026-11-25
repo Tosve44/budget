@@ -13,12 +13,33 @@ public struct SyncMeta: Codable, Equatable, Sendable {
     public var dirtyTransactions: Set<String> = []
     /// Entries deleted on this phone, kept until the deletion is uploaded.
     public var tombstones: [String: Transaction] = [:]
+    /// Duplicate categories removed on this phone, kept until the removal is uploaded.
+    public var categoryTombstones: [String: Category] = [:]
     /// Receipt photo id on this phone -> path in the cloud, once uploaded.
     public var uploaded: [String: String] = [:]
     public var lastSyncAt: String?
     public var lastError: String?
 
     public init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case userId, householdId, lastPull, dirtyCategories, dirtyTransactions, tombstones, categoryTombstones, uploaded, lastSyncAt, lastError
+    }
+
+    /// Reads what an older version of the app saved too (fields added later start empty).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try c.decodeIfPresent(String.self, forKey: .userId)
+        householdId = try c.decodeIfPresent(String.self, forKey: .householdId)
+        lastPull = try c.decodeIfPresent([String: String].self, forKey: .lastPull) ?? [:]
+        dirtyCategories = try c.decodeIfPresent(Set<String>.self, forKey: .dirtyCategories) ?? []
+        dirtyTransactions = try c.decodeIfPresent(Set<String>.self, forKey: .dirtyTransactions) ?? []
+        tombstones = try c.decodeIfPresent([String: Transaction].self, forKey: .tombstones) ?? [:]
+        categoryTombstones = try c.decodeIfPresent([String: Category].self, forKey: .categoryTombstones) ?? [:]
+        uploaded = try c.decodeIfPresent([String: String].self, forKey: .uploaded) ?? [:]
+        lastSyncAt = try c.decodeIfPresent(String.self, forKey: .lastSyncAt)
+        lastError = try c.decodeIfPresent(String.self, forKey: .lastError)
+    }
 
     func isDirty(_ t: SyncTable, _ id: String) -> Bool {
         t == .categories ? dirtyCategories.contains(id) : dirtyTransactions.contains(id)
@@ -62,7 +83,9 @@ public enum Timestamps {
 /// Converts between the phone's records and the cloud tables (see the web app's SYNC.md).
 public enum CloudRows {
     public static func row(_ c: Category, deleted: Bool = false) -> Row {
-        ["id": c.id, "space_id": c.spaceId, "name": c.name, "kind": c.kind.rawValue, "budget": c.budget,
+        // Clipped to the database's limits (Limits), so an old or imported record can never block syncing.
+        ["id": c.id, "space_id": c.spaceId, "name": Limits.clip(c.name, Limits.categoryName), "kind": c.kind.rawValue,
+         "budget": Limits.clamp(c.budget),
          "sort_order": c.order, "archived": c.archived, "deleted": deleted,
          "updated_at": c.updatedAt ?? "2000-01-01T00:00:00.000Z"]
     }
@@ -75,8 +98,9 @@ public enum CloudRows {
     }
 
     public static func row(_ t: Transaction, receiptPath: String?, deleted: Bool = false) -> Row {
-        ["id": t.id, "space_id": t.spaceId, "category_id": t.categoryId, "kind": t.kind.rawValue, "amount": t.amount,
-         "date": t.date, "note": t.note, "items": (t.items ?? []).map { ["name": $0.name, "price": $0.price] },
+        ["id": t.id, "space_id": t.spaceId, "category_id": t.categoryId, "kind": t.kind.rawValue, "amount": min(max(t.amount, 1), Limits.maxCents),
+         "date": t.date, "note": Limits.clip(t.note, Limits.note),
+         "items": (t.items ?? []).prefix(Limits.items).map { ["name": Limits.clip($0.name, Limits.itemName), "price": Limits.clamp($0.price)] },
          "receipt_path": receiptPath as Any? ?? NSNull(), "created_by": t.createdBy, "created_at": t.createdAt,
          "updated_at": t.updatedAt, "deleted": deleted]
     }
@@ -141,7 +165,7 @@ public final class SyncEngine {
     }
 
     public var isConnected: Bool { meta.userId != nil && meta.householdId != nil && client.session != nil }
-    public var pendingCount: Int { meta.dirtyCategories.count + meta.dirtyTransactions.count + meta.tombstones.count }
+    public var pendingCount: Int { meta.dirtyCategories.count + meta.dirtyTransactions.count + meta.tombstones.count + meta.categoryTombstones.count }
 
     func setState(_ s: State) { state = s; onStateChange?(s) }
     func persist() { saveMeta(meta) }
@@ -202,7 +226,7 @@ public final class SyncEngine {
     @discardableResult
     public func createHousehold(displayName: String) async throws -> String {
         guard let uid = client.userId else { throw SupabaseError.notSignedIn }
-        let h = try await client.rpc("create_household", ["display_name": displayName, "house_space_id": IDs.make("sp_house"),
+        let h = try await client.rpc("create_household", ["display_name": Limits.displayName(displayName), "house_space_id": IDs.make("sp_house"),
                                                           "personal_space_id": IDs.make("sp_personal")])
         guard let row = h as? Row, let hid = row["id"] as? String else { throw SupabaseError.badResponse }
         try await adopt(userId: uid, householdId: hid)
@@ -213,7 +237,7 @@ public final class SyncEngine {
     /// Joins the partner's household with their invite code.
     public func joinHousehold(code: String, displayName: String) async throws {
         guard let uid = client.userId else { throw SupabaseError.notSignedIn }
-        let h = try await client.rpc("join_household", ["code": code, "display_name": displayName, "personal_space_id": IDs.make("sp_personal")])
+        let h = try await client.rpc("join_household", ["code": code, "display_name": Limits.displayName(displayName), "personal_space_id": IDs.make("sp_personal")])
         guard let row = h as? Row, let hid = row["id"] as? String else { throw SupabaseError.badResponse }
         try await adopt(userId: uid, householdId: hid)
         try await syncNow()
@@ -345,11 +369,13 @@ public final class SyncEngine {
             setState(.syncing)
             defer { self.running = nil }
             do {
+                var rounds = 0
                 repeat {
                     again = false
+                    rounds += 1
                     try await push()
                     try await pull()
-                } while again
+                } while again && rounds < 4
                 meta.lastSyncAt = DateKey.timestamp()
                 meta.lastError = nil
                 persist()
@@ -397,6 +423,11 @@ public final class SyncEngine {
                     rows.append(CloudRows.row(t, receiptPath: photoPaths[id])); sent[id] = t.updatedAt
                 }
             }
+            if table == .categories {
+                for (id, dead) in meta.categoryTombstones.sorted(by: { $0.key < $1.key }) {
+                    rows.append(CloudRows.row(dead, deleted: true)); sent[id] = dead.updatedAt ?? ""
+                }
+            }
             if table == .transactions {
                 for (id, dead) in meta.tombstones.sorted(by: { $0.key < $1.key }) {
                     let path = dead.receiptId.flatMap { $0.hasPrefix("cloud:") ? String($0.dropFirst(6)) : nil }
@@ -420,6 +451,9 @@ public final class SyncEngine {
             let nowCats = Dictionary(now.categories.map { ($0.id, $0.updatedAt) }, uniquingKeysWith: { a, _ in a })
             let nowTx = Dictionary(now.transactions.map { ($0.id, $0.updatedAt as String?) }, uniquingKeysWith: { a, _ in a })
             for (id, at) in sent {
+                if table == .categories, let dead = meta.categoryTombstones[id], (dead.updatedAt ?? "") == at {
+                    meta.categoryTombstones[id] = nil
+                }
                 if table == .transactions, let dead = meta.tombstones[id], dead.updatedAt == at {
                     meta.tombstones[id] = nil
                     if dead.receiptId != nil { await removePhoto(dead) }
@@ -483,8 +517,42 @@ public final class SyncEngine {
         }
         if merge(.categories, results["categories"] ?? [], into: &d, force: false) { changed = true }
         if merge(.transactions, results["transactions"] ?? [], into: &d, force: false) { changed = true }
+        if mergeDuplicateCategories(&d) { changed = true; again = true } // upload the merge right away
         persist()
         if changed { store.replaceAll(d) }
+    }
+
+    /// Two phones that each added "Pets" offline end up with two "Pets" categories. After each
+    /// download, visible categories with the same space, kind and name (ignoring case) are merged:
+    /// the lowest id stays, entries move to it and the others are removed. Both phones (and the
+    /// web app) pick the same one, so they end up the same.
+    @discardableResult
+    func mergeDuplicateCategories(_ d: inout BudgetData) -> Bool {
+        let groups = Dictionary(grouping: d.categories.filter { !$0.archived }) {
+            "\($0.spaceId)|\($0.kind.rawValue)|\($0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
+        }
+        var loserToWinner: [String: String] = [:]
+        for (_, cats) in groups where cats.count > 1 {
+            let winner = cats.map(\.id).min()!
+            for c in cats where c.id != winner { loserToWinner[c.id] = winner }
+        }
+        if loserToWinner.isEmpty { return false }
+        let ts = DateKey.timestamp(store.now())
+        for i in d.transactions.indices {
+            if let w = loserToWinner[d.transactions[i].categoryId] {
+                d.transactions[i].categoryId = w
+                d.transactions[i].updatedAt = ts
+                meta.setDirty(.transactions, d.transactions[i].id, true)
+            }
+        }
+        for c in d.categories where loserToWinner[c.id] != nil {
+            var dead = c
+            dead.updatedAt = ts
+            meta.categoryTombstones[c.id] = dead
+            meta.setDirty(.categories, c.id, false)
+        }
+        d.categories.removeAll { loserToWinner[$0.id] != nil }
+        return true
     }
 
     @discardableResult
@@ -509,6 +577,10 @@ public final class SyncEngine {
             if table == .categories {
                 let i = removed.contains(id) ? nil : catIndex[id]
                 if !force, let i, meta.isDirty(table, id), !Timestamps.newer(r["updated_at"], than: d.categories[i].updatedAt) { continue }
+                if let dead = meta.categoryTombstones[id] {
+                    if !force && !Timestamps.newer(r["updated_at"], than: dead.updatedAt) { continue }
+                    meta.categoryTombstones[id] = nil
+                }
                 meta.setDirty(table, id, false)
                 if deleted { if i != nil { removed.insert(id); changed = true }; continue }
                 guard let next = CloudRows.category(r) else { continue }
@@ -561,7 +633,7 @@ public final class SyncEngine {
 
     public func rename(to displayName: String) async throws {
         guard let uid = meta.userId else { return }
-        try await client.update("members", values: ["display_name": displayName], whereColumn: "user_id", equals: uid)
+        try await client.update("members", values: ["display_name": Limits.displayName(displayName)], whereColumn: "user_id", equals: uid)
         try await syncNow()
     }
 

@@ -8,10 +8,36 @@ import BudgetKit
 /// phone, works offline and is free. The pieces of text it finds are put back into lines
 /// (TextLines) and then parsed exactly like the web app does (ReceiptParser).
 enum ReceiptReader {
+    /// Reads the photo as it is; if that finds fewer than 3 items and no total, the photo was
+    /// probably taken sideways or upside down, so it is read turned 90°, 270° and 180° too
+    /// (same as the web app), and the best reading is kept.
     static func read(_ image: UIImage) async throws -> String {
         guard let cg = image.cgImage else { return "" }
-        let orientation = CGImagePropertyOrientation(image.imageOrientation)
-        return try await Task.detached(priority: .userInitiated) {
+        let base = CGImagePropertyOrientation(image.imageOrientation)
+        var best = ""
+        var bestScore = -1
+        for orientation in [base] + turns(of: base) {
+            let text = try await recognize(cg, orientation)
+            let items = ReceiptParser.parse(text).count
+            let hasTotal = ReceiptParser.findTotal(text) != nil
+            if items >= 3 || hasTotal { return text }
+            let score = items * 2 + (text.isEmpty ? 0 : 1)
+            if score > bestScore { best = text; bestScore = score }
+        }
+        return best
+    }
+
+    /// The same photo turned 90°, 270° and 180°.
+    static func turns(of o: CGImagePropertyOrientation) -> [CGImagePropertyOrientation] {
+        let cycle: [CGImagePropertyOrientation] = [.up, .right, .down, .left]
+        let mirrored: [CGImagePropertyOrientation] = [.upMirrored, .rightMirrored, .downMirrored, .leftMirrored]
+        let ring = cycle.contains(o) ? cycle : mirrored
+        let i = ring.firstIndex(of: o) ?? 0
+        return [ring[(i + 1) % 4], ring[(i + 3) % 4], ring[(i + 2) % 4]]
+    }
+
+    static func recognize(_ cg: CGImage, _ orientation: CGImagePropertyOrientation) async throws -> String {
+        try await Task.detached(priority: .userInitiated) {
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
             // Product names and codes are not dictionary words; "correcting" them makes it worse.

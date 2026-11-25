@@ -15,13 +15,35 @@ public protocol HTTPTransport: Sendable {
 public struct URLSessionTransport: HTTPTransport {
     public init() {}
     public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        try await withCheckedThrowingContinuation { cont in
-            URLSession.shared.dataTask(with: request) { data, response, error in
-                if let error { cont.resume(throwing: SupabaseError.network(error.localizedDescription)); return }
-                guard let http = response as? HTTPURLResponse else { cont.resume(throwing: SupabaseError.network("No response")); return }
-                cont.resume(returning: (data ?? Data(), http))
-            }.resume()
+        let box = TaskBox()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { cont in
+                let task = URLSession.shared.dataTask(with: request) { data, response, error in
+                    if let error { cont.resume(throwing: SupabaseError.network(error.localizedDescription)); return }
+                    guard let http = response as? HTTPURLResponse else { cont.resume(throwing: SupabaseError.network("No response")); return }
+                    cont.resume(returning: (data ?? Data(), http))
+                }
+                box.set(task)
+                task.resume()
+            }
+        } onCancel: {
+            box.cancel() // stops the request when its time is up
         }
+    }
+}
+
+/// Holds the running request so it can be cancelled from another thread.
+final class TaskBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: URLSessionDataTask?
+    private var cancelled = false
+    func set(_ t: URLSessionDataTask) {
+        lock.lock(); task = t; let c = cancelled; lock.unlock()
+        if c { t.cancel() }
+    }
+    func cancel() {
+        lock.lock(); cancelled = true; let t = task; lock.unlock()
+        t?.cancel()
     }
 }
 
@@ -54,6 +76,8 @@ public enum SupabaseError: Error, Equatable, LocalizedError {
     }
 }
 
+struct UncheckedBox<T>: @unchecked Sendable { let value: T; init(_ v: T) { value = v } }
+
 /// A signed-in session. Kept in the phone's Keychain by the app.
 public struct AuthSession: Codable, Equatable, Sendable {
     public var accessToken: String
@@ -85,6 +109,9 @@ public final class SupabaseClient: @unchecked Sendable {
     let keeper: SessionKeeper
     public private(set) var session: AuthSession?
     public var now: () -> Date = Date.init
+    /// A hung connection must never freeze syncing: give up after this long (photos get longer).
+    public var requestTimeout: TimeInterval = 20
+    public var uploadTimeout: TimeInterval = 90
 
     public init(url: URL, anonKey: String, transport: HTTPTransport = URLSessionTransport(), keeper: SessionKeeper = MemorySessionKeeper()) {
         self.url = url
@@ -97,7 +124,7 @@ public final class SupabaseClient: @unchecked Sendable {
     // MARK: requests
 
     func request(_ method: String, _ path: String, query: [(String, String)] = [], json: Any? = nil, body: Data? = nil,
-                 headers: [String: String] = [:], auth: Bool = true) async throws -> (Data, HTTPURLResponse) {
+                 headers: [String: String] = [:], auth: Bool = true, timeout: TimeInterval? = nil) async throws -> (Data, HTTPURLResponse) {
         var comps = URLComponents(url: url.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty {
             comps.queryItems = query.map { URLQueryItem(name: $0.0, value: $0.1) }
@@ -106,7 +133,8 @@ public final class SupabaseClient: @unchecked Sendable {
         }
         var req = URLRequest(url: comps.url!)
         req.httpMethod = method
-        req.timeoutInterval = 30
+        let timeout = timeout ?? requestTimeout
+        req.timeoutInterval = timeout
         req.setValue(anonKey, forHTTPHeaderField: "apikey")
         if auth {
             let token = try await validAccessToken()
@@ -123,9 +151,25 @@ public final class SupabaseClient: @unchecked Sendable {
             req.httpBody = body
         }
         for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
-        let (data, res) = try await transport.send(req)
+        let (data, res) = try await Self.withDeadline(timeout) { [transport] in try await transport.send(req) }
         guard (200..<300).contains(res.statusCode) else { throw Self.error(status: res.statusCode, data: data) }
         return (data, res)
+    }
+
+    /// Runs `work`, but gives up after `seconds` in total (URLSession's own timeout only
+    /// counts time with no data, so a trickling connection could otherwise hang for minutes).
+    /// The request must stop when cancelled (URLSessionTransport does).
+    static func withDeadline<T>(_ seconds: TimeInterval, _ work: @escaping @Sendable () async throws -> T) async throws -> T {
+        let result = try await withThrowingTaskGroup(of: UncheckedBox<T>.self) { group in
+            group.addTask { UncheckedBox(try await work()) }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw SupabaseError.network("Timed out")
+            }
+            defer { group.cancelAll() }
+            return try await group.next()!
+        }
+        return result.value
     }
 
     static func error(status: Int, data: Data) -> SupabaseError {
@@ -236,11 +280,12 @@ public final class SupabaseClient: @unchecked Sendable {
 
     public func upload(bucket: String, path: String, jpeg: Data) async throws {
         _ = try await request("POST", objectPath(bucket, path), body: jpeg,
-                              headers: ["Content-Type": "image/jpeg", "x-upsert": "true", "cache-control": "max-age=3600"])
+                              headers: ["Content-Type": "image/jpeg", "x-upsert": "true", "cache-control": "max-age=3600"],
+                              timeout: uploadTimeout)
     }
 
     public func download(bucket: String, path: String) async throws -> Data {
-        try await request("GET", "storage/v1/object/authenticated/\(bucket)/\(path)").0
+        try await request("GET", "storage/v1/object/authenticated/\(bucket)/\(path)", timeout: uploadTimeout).0
     }
 
     public func remove(bucket: String, paths: [String]) async throws {

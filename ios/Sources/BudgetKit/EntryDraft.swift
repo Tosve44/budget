@@ -33,13 +33,16 @@ public struct EntryDraft: Equatable, Sendable {
     }
 
     public enum Problem: Error, Equatable, LocalizedError {
-        case amount, category, date, itemPrice(String)
+        case amount, category, date, itemPrice(String), amountTooBig, noteTooLong, tooManyItems
         public var errorDescription: String? {
             switch self {
             case .amount: return "Enter an amount bigger than 0."
             case .category: return "Pick a category."
             case .date: return "Pick a date."
             case .itemPrice(let n): return "Check the price of \"\(n)\"."
+            case .amountTooBig: return "That amount is too big."
+            case .noteTooLong: return "The note is too long (at most \(Limits.note) characters)."
+            case .tooManyItems: return "A receipt can have at most \(Limits.items) items."
             }
         }
     }
@@ -49,8 +52,8 @@ public struct EntryDraft: Equatable, Sendable {
         try lines.compactMap { l in
             let name = l.name.trimmingCharacters(in: .whitespacesAndNewlines)
             if name.isEmpty { return nil }
-            guard let p = Money.cents(l.priceText), p >= 0 else { throw Problem.itemPrice(name) }
-            return ReceiptItem(name: name, price: p)
+            guard let p = Money.cents(l.priceText), p >= 0, p <= Limits.maxCents else { throw Problem.itemPrice(name) }
+            return ReceiptItem(name: Limits.clip(name, Limits.itemName), price: p)
         }
     }
 
@@ -60,9 +63,20 @@ public struct EntryDraft: Equatable, Sendable {
 
     public func check() throws -> Checked {
         guard let a = Money.cents(amountText), a > 0 else { throw Problem.amount }
+        guard a <= Limits.maxCents else { throw Problem.amountTooBig }
         guard let c = categoryId, !c.isEmpty else { throw Problem.category }
         guard DateKey.isValidDay(date) else { throw Problem.date }
-        return Checked(amount: a, categoryId: c, items: try items())
+        guard Limits.length(note.trimmingCharacters(in: .whitespacesAndNewlines)) <= Limits.note else { throw Problem.noteTooLong }
+        let items = try items()
+        guard items.count <= Limits.items else { throw Problem.tooManyItems }
+        return Checked(amount: a, categoryId: c, items: items)
+    }
+
+    /// True when the entry being edited was deleted meanwhile (for example by the partner).
+    /// Saving then adds it again as a new entry, and the screen says so.
+    public func wasDeletedMeanwhile(in store: BudgetStore) -> Bool {
+        guard let id = existingId else { return false }
+        return !store.data.transactions.contains { $0.id == id }
     }
 
     /// Saves the draft as a new entry or over the one being edited. Returns the entry.

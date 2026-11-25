@@ -13,7 +13,8 @@ final class StoreTests: XCTestCase {
     func testMoneyTyping() {
         let cases: [String: Int?] = ["12": 1200, "12,5": 1250, "12.50": 1250, "0,99": 99, "1.299,00": 129900,
                                      "1,299.00": 129900, " 7 ": 700, "": nil, "abc": nil, "1e3": nil, "0x10": nil,
-                                     "−5": nil, "12,50 €": nil, "\u{00A0}3,20\u{2003}": 320]
+                                     "−5": nil, "-5": nil, "12,50 €": 1250, "\u{00A0}3,20\u{2003}": 320,
+                                     "1.000": 100000, "1.000.000": 100000000, "12.500,50": 1250050, "0.500": 50, "1.0000": 100]
         for (input, want) in cases { XCTAssertEqual(Money.cents(input), want, input) }
         XCTAssertEqual(Money.cents("0.1")! + Money.cents("0.2")!, 30) // no floating point drift
         XCTAssertEqual(Money.cents("1,15"), 115)

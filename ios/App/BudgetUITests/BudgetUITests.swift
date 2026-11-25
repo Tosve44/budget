@@ -100,6 +100,16 @@ final class BudgetUITests: XCTestCase {
         XCTAssertTrue(app.buttons["addExpense"].waitForExistence(timeout: 5))
         XCTAssertTrue(text("spentAmount").contains("9,99"))
         XCTAssertEqual(entries().count, 2)
+        let balance = app.descendants(matching: .any)["balance"].label
+        XCTAssertTrue(balance.contains("+") && balance.contains("1.490,01"), "income minus spent: \(balance)")
+    }
+
+    func testBalanceTurnsNegativeWhenSpendingMoreThanIncome() {
+        launch()
+        addEntry(amount: "100", category: "Salary", kind: "Income")
+        addEntry(amount: "150", category: "Groceries")
+        let balance = app.descendants(matching: .any)["balance"].label
+        XCTAssertTrue(balance.contains("−") && balance.contains("50"), balance)
     }
 
     func testCannotSaveWithoutAmountOrCategory() {
