@@ -53,6 +53,8 @@ final class BudgetUITests: XCTestCase {
         let l = list ?? app.collectionViews.firstMatch
         var n = 0
         while !element.isHittable && n < 8 { l.swipeUp(); n += 1 }
+        n = 0
+        while !element.isHittable && n < 10 { l.swipeDown(); n += 1 } // it was above
     }
 
     // MARK: tests
@@ -264,12 +266,17 @@ final class BudgetUITests: XCTestCase {
 
     func testTappingACategoryFiltersTheEntries() {
         launch(["-demo-data"])
-        let all = entries().count
         app.buttons["category.Groceries"].tap()
         XCTAssertTrue(app.buttons["clearFilter"].waitForExistence(timeout: 5))
+        // On a small iPhone the entries are below the fold; lists only build rows on screen.
+        scrollTo(entries().firstMatch)
         XCTAssertEqual(entries().count, 1)
+        XCTAssertTrue(entries().firstMatch.label.contains("Groceries"), entries().firstMatch.label)
+        scrollTo(app.buttons["clearFilter"])
         app.buttons["clearFilter"].tap()
-        XCTAssertEqual(entries().count, all)
+        XCTAssertFalse(app.buttons["clearFilter"].waitForExistence(timeout: 1))
+        scrollTo(entries().element(boundBy: 1))
+        XCTAssertGreaterThan(entries().count, 1, "all entries again")
     }
 
     func testPartnerBalanceSuggestion() {
