@@ -450,8 +450,15 @@ struct WebPhone {
     @discardableResult
     func run(_ command: String, _ args: [String: Any] = [:]) throws -> Result {
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["NODE_BIN"] ?? "/usr/bin/node")
-        p.arguments = [script, webDir, state, command, String(data: try JSONSerialization.data(withJSONObject: args), encoding: .utf8)!]
+        // Node from NODE_BIN, else whichever "node" is on the PATH.
+        if let bin = ProcessInfo.processInfo.environment["NODE_BIN"] {
+            p.executableURL = URL(fileURLWithPath: bin)
+            p.arguments = []
+        } else {
+            p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            p.arguments = ["node"]
+        }
+        p.arguments! += [script, webDir, state, command, String(data: try JSONSerialization.data(withJSONObject: args), encoding: .utf8)!]
         var env = ProcessInfo.processInfo.environment
         env["SUPABASE_URL"] = url.absoluteString
         env["SUPABASE_ANON_KEY"] = key
