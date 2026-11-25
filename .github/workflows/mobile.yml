@@ -126,19 +126,10 @@ jobs:
         with:
           name: android-test-app
           path: mobile/test-app
+      - name: Start the emulator
+        run: bash tool/ci-android-emulator.sh "${{ matrix.api }}" "${{ matrix.profile }}"
       - name: Run on the emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ matrix.api }}
-          target: google_apis
-          arch: x86_64
-          profile: ${{ matrix.profile }}
-          ram-size: 4096M
-          disk-size: 6000M
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          disable-animations: true
-          working-directory: mobile
-          script: bash tool/ci-android-test.sh "${{ matrix.font }}" "${{ matrix.dark }}" device-test.log test-app/app-debug.apk
+        run: bash tool/ci-android-test.sh "${{ matrix.font }}" "${{ matrix.dark }}" device-test.log test-app/app-debug.apk
       - name: Summary
         if: always()
         run: |
