@@ -41,12 +41,16 @@ jobs:
         run: swift test
 
   iphone:
-    name: iPhone app (${{ matrix.device }})
+    name: iPhone app (${{ matrix.name }})
     runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
-        device: ["iPhone SE (3rd generation)", "iPhone 16 Pro Max"]
+        include:
+          - name: small iPhone
+            device: iPhone-SE-3rd-generation
+          - name: large iPhone
+            device: iPhone-16-Pro-Max
     steps:
       - uses: actions/checkout@v4
       - run: brew install xcodegen
@@ -61,11 +65,16 @@ jobs:
         working-directory: ios/App
         run: |
           set -o pipefail
+          SIM="$(../scripts/ci-simulator.sh ${{ matrix.device }} ${{ matrix.ios }})"
           xcodebuild test -project Budget.xcodeproj -scheme Budget \
-            -destination "platform=iOS Simulator,name=${{ matrix.device }}" \
-            -resultBundlePath TestResults.xcresult CODE_SIGNING_ALLOWED=NO | tail -200
+            -destination "id=$SIM" \
+            -resultBundlePath TestResults.xcresult CODE_SIGNING_ALLOWED=NO > xcodebuild.log 2>&1 || {
+              grep -E "error:|: failed|Failing tests|^\s+-\[|\*\* " xcodebuild.log | head -200; tail -40 xcodebuild.log; exit 1; }
+          grep -E "Executed|\*\* " xcodebuild.log | tail -10
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results-${{ matrix.device }}
-          path: ios/App/TestResults.xcresult
+          name: test-results-${{ matrix.name }}
+          path: |
+            ios/App/TestResults.xcresult
+            ios/App/xcodebuild.log

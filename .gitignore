@@ -6,3 +6,4 @@ ios/.build/
 ios/.swiftpm/
 ios/App/Budget.xcodeproj/
 ios/App/TestResults.xcresult/
+ios/App/xcodebuild.log
