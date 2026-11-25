@@ -360,8 +360,14 @@ final class BudgetUITests: XCTestCase {
         tab("Settings")
         XCTAssertTrue(app.segmentedControls["appearancePicker"].buttons["Light"].isSelected, "remembered")
         app.segmentedControls["appearancePicker"].buttons["Dark"].tap()
+        XCTAssertTrue(app.segmentedControls["appearancePicker"].buttons["Dark"].isSelected)
         tour("chosen dark")
-        app.segmentedControls["appearancePicker"].buttons["Automatic"].tap()
+        // The tour ends on Personal, so go back to Settings to switch back.
+        tab("Settings")
+        let again = app.segmentedControls["appearancePicker"]
+        XCTAssertTrue(again.waitForExistence(timeout: 5))
+        again.buttons["Automatic"].tap()
+        XCTAssertTrue(again.buttons["Automatic"].isSelected)
     }
 
     func testVeryLargeText() {
