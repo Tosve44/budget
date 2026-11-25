@@ -18,7 +18,7 @@ async function check(name, fn) {
 function assert(c, msg) { if (!c) throw new Error(msg || 'assertion failed'); }
 
 (async () => {
-  const key = process.env.SUPABASE_ANON_KEY || (await (await fetch(`${SB_URL}/__test/anon-key`)).json()).key;
+  const key = process.env.SUPABASE_ANON_KEY || (process.env.USE_BUILT_IN_CONFIG ? '' : (await (await fetch(`${SB_URL}/__test/anon-key`)).json()).key);
   const browser = await chromium.launch();
   async function phone(device) {
     const ctx = await browser.newContext({ ...devices[device], locale: 'sl-SI', timezoneId: 'Europe/Ljubljana' });
@@ -52,8 +52,8 @@ function assert(c, msg) { if (!c) throw new Error(msg || 'assertion failed'); }
 
   const A = await phone('iPhone 13');
   const B = await phone('iPhone SE');
-  const tosveEmail = `tosve-${run}@example.test`;
-  const milicaEmail = `milica-${run}@example.test`;
+  const tosveEmail = `test-tosve-${run}@example.com`;
+  const milicaEmail = `test-milica-${run}@example.com`;
 
   await check('Tosve uses the app before signing in (offline-only mode still works)', async () => {
     await addEntry(A.p, { amount: '55', cat: 'Gas' });

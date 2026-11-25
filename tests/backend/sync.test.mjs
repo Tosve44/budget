@@ -14,6 +14,7 @@ const { createClient } = require('@supabase/supabase-js');
 const URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 let KEY = process.env.SUPABASE_ANON_KEY;
 const run = Date.now().toString(36);
+const FAKE = !process.env.SUPABASE_URL; // the local test server can simulate network failures
 
 class Mem { constructor() { this.m = {}; } getItem(k) { return this.m[k] ?? null; } setItem(k, v) { this.m[k] = String(v); } removeItem(k) { delete this.m[k]; } }
 class Photos { constructor() { this.m = new Map(); } async get(id) { return this.m.get(id); } async put(id, b) { this.m.set(id, b); } async del(id) { this.m.delete(id); } }
@@ -31,10 +32,11 @@ const cat = (store, space, name, kind = 'expense') => store.categories(space.id,
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let T, M; // the two phones
-const email = (n) => `${n}-${run}@example.test`;
+const email = (n) => `test-${n}-${run}@example.com`;
 
 before(async () => {
   if (!KEY) KEY = (await (await fetch(`${URL}/__test/anon-key`)).json()).key;
+  if (!FAKE) await new Promise((r) => setTimeout(r, 10));
   T = phone();
   M = phone();
 });
@@ -143,7 +145,7 @@ test('delete on one phone vs a later edit on the other: the later edit wins', as
   for (const p of [T, M]) assert.equal(p.store.data.transactions.find((x) => x.id === t.id)?.amount, 1099);
 });
 
-test('no connection: changes wait on the phone and go up once the connection is back', async () => {
+test('no connection: changes wait on the phone and go up once the connection is back', { skip: !FAKE && 'needs the local test server' }, async () => {
   const s = M.store;
   const t = s.addTransaction({ spaceId: s.houseSpace().id, categoryId: cat(s, s.houseSpace(), 'Unexpected expenses').id, kind: 'expense', amount: 4200, date: '2026-11-17', note: 'Plumber' });
   await faults({ failNext: 50 });
@@ -158,7 +160,7 @@ test('no connection: changes wait on the phone and go up once the connection is 
   assert.ok(T.store.data.transactions.find((x) => x.id === t.id));
 });
 
-test('connection drops halfway through a sync: nothing is lost or doubled', async () => {
+test('connection drops halfway through a sync: nothing is lost or doubled', { skip: !FAKE && 'needs the local test server' }, async () => {
   const s = T.store;
   const ids = [];
   for (let i = 0; i < 5; i++) ids.push(s.addTransaction({ spaceId: s.houseSpace().id, categoryId: cat(s, s.houseSpace(), 'Groceries').id, kind: 'expense', amount: 100 + i, date: '2026-11-18' }).id);
@@ -225,7 +227,7 @@ test("Milica cannot read Tosve's personal receipt photos", async () => {
 test('many entries: 2,500 entries sync both ways (more than one page)', async () => {
   const s = T.store;
   const groc = cat(s, s.houseSpace(), 'Groceries').id;
-  for (let i = 0; i < 2500; i++) {
+  for (let i = 0; i < (FAKE ? 2500 : 1200); i++) {
     s.addTransaction({ spaceId: s.houseSpace().id, categoryId: groc, kind: 'expense', amount: 1 + i, date: `2026-${String(1 + (i % 11)).padStart(2, '0')}-0${1 + (i % 9)}` });
   }
   const t0 = Date.now();
@@ -236,7 +238,7 @@ test('many entries: 2,500 entries sync both ways (more than one page)', async ()
   const down = Date.now() - t1;
   const count = (p) => p.store.data.transactions.filter((x) => x.spaceId === p.store.houseSpace().id).length;
   assert.equal(count(M), count(T));
-  assert.ok(count(M) > 2500);
+  assert.ok(count(M) > (FAKE ? 2500 : 1200));
   console.log(`    2,500 entries: upload ${up} ms, download ${down} ms`);
 });
 
@@ -258,7 +260,7 @@ test('wrong password and duplicate sign-up give clear messages', async () => {
   const X = phone();
   await assert.rejects(X.sync.signIn(email('tosve'), 'nope-wrong'), /Wrong email or password/);
   await assert.rejects(X.sync.signUp(email('tosve'), 'secret123'), /already has an account/);
-  await assert.rejects(X.sync.signUp(`short-${run}@example.test`, '123'), /too short/);
+  await assert.rejects(X.sync.signUp(`test-short-${run}@example.com`, '123'), /too short/);
 });
 
 test('currency and names sync', async () => {

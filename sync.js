@@ -338,7 +338,7 @@ export class Sync {
         if (this.meta.tombstones[table][id]?.updatedAt === at) {
           const dead = this.meta.tombstones[table][id];
           delete this.meta.tombstones[table][id];
-          if (table === 'transactions' && dead.receiptId) this.removePhoto(dead).catch(() => {});
+          if (table === 'transactions' && dead.receiptId) await this.removePhoto(dead).catch((e) => console.warn('photo not removed', e));
         }
         const local = (table === 'categories' ? now.categories : now.transactions).find((x) => x.id === id);
         if (this.meta.dirty[table][id] && (!local || local.updatedAt === at)) delete this.meta.dirty[table][id];
