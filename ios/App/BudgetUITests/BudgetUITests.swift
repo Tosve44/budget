@@ -349,7 +349,7 @@ final class BudgetUITests: XCTestCase {
         tab("Settings")
         let picker = app.segmentedControls["appearancePicker"]
         XCTAssertTrue(picker.waitForExistence(timeout: 5))
-        XCTAssertTrue(picker.buttons["Same as iPhone"].isSelected, "follows the iPhone by default")
+        XCTAssertTrue(picker.buttons["Automatic"].isSelected, "follows the iPhone by default")
         picker.buttons["Light"].tap()
         XCTAssertTrue(picker.buttons["Light"].isSelected)
         tour("chosen light on a dark iPhone")
@@ -361,7 +361,7 @@ final class BudgetUITests: XCTestCase {
         XCTAssertTrue(app.segmentedControls["appearancePicker"].buttons["Light"].isSelected, "remembered")
         app.segmentedControls["appearancePicker"].buttons["Dark"].tap()
         tour("chosen dark")
-        app.segmentedControls["appearancePicker"].buttons["Same as iPhone"].tap()
+        app.segmentedControls["appearancePicker"].buttons["Automatic"].tap()
     }
 
     func testVeryLargeText() {

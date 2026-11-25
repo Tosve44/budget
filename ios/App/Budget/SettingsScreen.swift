@@ -40,18 +40,6 @@ struct SettingsScreen: View {
                     }
                 }
 
-                Section {
-                    Picker("Look", selection: $appearance) {
-                        ForEach(Appearance.allCases) { a in Text(a.title).tag(a) }
-                    }
-                    .pickerStyle(.segmented)
-                    .accessibilityIdentifier("appearancePicker")
-                } header: {
-                    Text("Appearance")
-                } footer: {
-                    Text("Light or dark colours. \"Same as iPhone\" follows your iPhone's setting.")
-                }
-
                 PartnerBalanceSection()
 
                 Section {
@@ -63,6 +51,18 @@ struct SettingsScreen: View {
                         }
                     }
                     .accessibilityIdentifier("sharing")
+                }
+
+                Section {
+                    Picker("Look", selection: $appearance) {
+                        ForEach(Appearance.allCases) { a in Text(a.title).tag(a) }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("appearancePicker")
+                } header: {
+                    Text("Appearance")
+                } footer: {
+                    Text("Light or dark colours. \"Automatic\" follows your iPhone's setting.")
                 }
 
                 Section {
