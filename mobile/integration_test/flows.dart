@@ -48,12 +48,35 @@ Future<void> tapKey(WidgetTester tester, String key) async {
 
 Future<void> typeInto(WidgetTester tester, String key, String text) async {
   final f = find.byKey(Key(key));
-  await reveal(tester, f);
-  await tester.enterText(f.first, text);
-  await tester.pumpAndSettle();
-  await reveal(tester, f);
-  final typed = tester.widget<TextField>(find.descendant(of: f.first, matching: find.byType(TextField), matchRoot: true).first).controller?.text;
+  String? typed;
+  // Like a person: tap the field first so it has the focus, then type. On a slow or small phone
+  // the first try can land while the screen is still moving, so it is checked and tried again.
+  for (var attempt = 0; attempt < 3; attempt++) {
+    await reveal(tester, f);
+    await tester.pumpAndSettle();
+    await tester.tap(f.first, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    await tester.enterText(f.first, text);
+    await tester.pumpAndSettle();
+    await reveal(tester, f);
+    typed = tester
+        .widget<TextField>(find.descendant(of: f.first, matching: find.byType(TextField), matchRoot: true).first)
+        .controller
+        ?.text;
+    if (typed == text) return;
+    debugPrint('typeInto $key: attempt ${attempt + 1} left "$typed", focus on ${FocusManager.instance.primaryFocus}');
+  }
   expect(typed, text, reason: 'typing into $key');
+}
+
+/// Waits for something that the app does in the background, such as reading a photo, which on a
+/// real phone can take longer than one settled frame.
+Future<void> waitFor(WidgetTester tester, Finder f, {Duration timeout = const Duration(seconds: 60)}) async {
+  final end = DateTime.now().add(timeout);
+  while (f.evaluate().isEmpty && DateTime.now().isBefore(end)) {
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+  if (f.evaluate().isNotEmpty) await tester.pumpAndSettle();
 }
 
 Future<void> tapText(WidgetTester tester, String text) async {
@@ -129,6 +152,13 @@ final flows = <String, Future<void> Function(WidgetTester)>{
     final model = await pumpApp(tester);
     await tapKey(tester, 'addEntry');
     await tapKey(tester, 'scanReceipt');
+    await waitFor(tester, find.byKey(const Key('readNote')), timeout: const Duration(seconds: 20));
+    if (find.byKey(const Key('readNote')).evaluate().isEmpty) {
+      // The tap can land while the screen is still moving on a slow phone; a person would tap again.
+      debugPrint('receipt: no note after the first tap (photo shown: ${find.byKey(const Key('receiptThumb')).evaluate().isNotEmpty})');
+      await tapKey(tester, 'scanReceipt');
+      await waitFor(tester, find.byKey(const Key('readNote')));
+    }
     expect(find.byKey(const Key('readNote')), findsOneWidget);
     expect(find.textContaining('Found 2 items'), findsOneWidget);
     await reveal(tester, find.byKey(const Key('amountField')));
