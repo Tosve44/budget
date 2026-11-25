@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Runs the device tests on the Android emulator that is already started (GitHub Actions).
-#   tool/ci-android-test.sh <font scale> <dark: yes/no> <log file>
+#   tool/ci-android-test.sh <font scale> <dark: yes/no> <log file> <test apk>
+# The test app is built once by another job (so 13 jobs do not all download the same build tools).
 set -uo pipefail
-FONT="${1:-1.0}"; DARK="${2:-no}"; LOG="${3:-device-test.log}"
+FONT="${1:-1.0}"; DARK="${2:-no}"; LOG="${3:-device-test.log}"; APK="${4:-app-debug.apk}"
 adb wait-for-device
 # Same settings a person could pick in the phone's settings.
 adb shell settings put system font_scale "$FONT" || true
@@ -10,5 +11,6 @@ adb shell cmd uimode night "$DARK" || true
 for a in window_animation_scale transition_animation_scale animator_duration_scale; do adb shell settings put global "$a" 0 || true; done
 adb shell input keyevent 82 || true
 echo "Emulator: $(adb shell getprop ro.product.model) | Android $(adb shell getprop ro.build.version.release) (API $(adb shell getprop ro.build.version.sdk)) | $(adb shell wm size | tail -1) | $(adb shell wm density | tail -1) | font x$FONT | dark $DARK" | tee "$LOG"
-flutter test integration_test/app_test.dart -d emulator-5554 --reporter expanded 2>&1 | tee -a "$LOG"
+flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart \
+  --use-application-binary="$APK" -d emulator-5554 2>&1 | tee -a "$LOG"
 exit "${PIPESTATUS[0]}"

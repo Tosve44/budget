@@ -61,9 +61,35 @@ jobs:
           NODE_MODULES_DIR: /tmp/budget-test-backend/node_modules
         run: flutter test test/sync_test.dart
 
+  android-build:
+    name: Android test app (built once)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build the test app
+        run: |
+          for i in 1 2 3; do flutter build apk --debug -t integration_test/app_test.dart && break; echo "Retrying in 60 s"; sleep 60; done
+          test -f build/app/outputs/flutter-apk/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-test-app
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+
   android:
     name: Android ${{ matrix.android }} · ${{ matrix.name }}
-    needs: logic
+    needs: [logic, android-build]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -90,18 +116,16 @@ jobs:
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
       - run: flutter pub get
-      - name: Build the test app first (so the emulator is not kept waiting)
-        run: flutter build apk --debug -t integration_test/app_test.dart
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-test-app
+          path: mobile/test-app
       - name: Run on the emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -114,12 +138,12 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           disable-animations: true
           working-directory: mobile
-          script: bash tool/ci-android-test.sh "${{ matrix.font }}" "${{ matrix.dark }}" device-test.log
+          script: bash tool/ci-android-test.sh "${{ matrix.font }}" "${{ matrix.dark }}" device-test.log test-app/app-debug.apk
       - name: Summary
         if: always()
         run: |
           { echo "### Android ${{ matrix.android }} · ${{ matrix.name }}"; head -1 device-test.log 2>/dev/null;
-            grep -E "^(DEVICE|OCR) " device-test.log 2>/dev/null | sed 's/^/    /';
+            grep -E "(DEVICE|OCR|RESULT) " device-test.log 2>/dev/null | sed 's/^/    /';
             grep -E "All tests passed|Some tests failed|\[E\]" device-test.log 2>/dev/null | tail -15; } >> "$GITHUB_STEP_SUMMARY" || true
       - uses: actions/upload-artifact@v4
         if: always()
@@ -165,7 +189,7 @@ jobs:
         if: always()
         run: |
           { echo "### iOS ${{ matrix.ios }} · ${{ matrix.name }}"; head -1 device-test.log 2>/dev/null;
-            grep -E "^(DEVICE|OCR) " device-test.log 2>/dev/null | sed 's/^/    /';
+            grep -E "(DEVICE|OCR|RESULT) " device-test.log 2>/dev/null | sed 's/^/    /';
             grep -E "All tests passed|Some tests failed|\[E\]" device-test.log 2>/dev/null | tail -15; } >> "$GITHUB_STEP_SUMMARY" || true
       - uses: actions/upload-artifact@v4
         if: always()
@@ -190,8 +214,9 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - uses: gradle/actions/setup-gradle@v4
       - name: Android app (APK)
-        run: flutter build apk --release
+        run: for i in 1 2 3; do flutter build apk --release && break; sleep 60; done; test -f build/app/outputs/flutter-apk/app-release.apk
       - name: iPhone app (unsigned IPA, for Sideloadly / AltStore with a free Apple ID)
         run: |
           flutter build ios --release --no-codesign

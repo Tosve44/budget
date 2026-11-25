@@ -29,28 +29,44 @@ void main() {
   });
 
   for (final f in flows.entries) {
-    testWidgets(f.key, f.value);
+    testWidgets(f.key, (tester) => logged(f.key, () => f.value(tester)));
   }
 
   group('receipt photos read by the phone', () {
     for (final photo in receiptPhotos.entries) {
-      test(photo.key, () async {
-        final dir = await getTemporaryDirectory();
-        final file = File('${dir.path}/${photo.key}');
-        await file.writeAsBytes(base64Decode(photo.value));
-        final text = await const DeviceReceiptReader().read(file.path).timeout(const Duration(minutes: 2));
-        final items = ReceiptParser.parse(text);
-        final total = ReceiptParser.findTotal(text);
-        // ignore: avoid_print
-        print('OCR ${photo.key}: ${items.length} items, total $total | ${items.take(4).map((i) => '${i.name} ${i.price}').join('; ')}');
-        expect(text, isNotEmpty, reason: 'no text found at all');
-        expect(items.isNotEmpty || total != null, isTrue, reason: 'found neither items nor a total in:\n$text');
-        if (photo.key == 'mercator.jpg') {
-          // The web app's own test checks the same two things on this photo.
-          expect(total, 839, reason: text);
-          expect(items.any((i) => i.name.startsWith('MLEKO')), isTrue, reason: text);
-        }
-      });
+      test(
+        photo.key,
+        () => logged('photo ${photo.key}', () async {
+          final dir = await getTemporaryDirectory();
+          final file = File('${dir.path}/${photo.key}');
+          await file.writeAsBytes(base64Decode(photo.value));
+          final text = await const DeviceReceiptReader().read(file.path).timeout(const Duration(minutes: 2));
+          final items = ReceiptParser.parse(text);
+          final total = ReceiptParser.findTotal(text);
+          // ignore: avoid_print
+          print('OCR ${photo.key}: ${items.length} items, total $total | ${items.take(4).map((i) => '${i.name} ${i.price}').join('; ')}');
+          expect(text, isNotEmpty, reason: 'no text found at all');
+          expect(items.isNotEmpty || total != null, isTrue, reason: 'found neither items nor a total in:\n$text');
+          if (photo.key == 'mercator.jpg') {
+            // The web app's own test checks the same two things on this photo.
+            expect(total, 839, reason: text);
+            expect(items.any((i) => i.name.startsWith('MLEKO')), isTrue, reason: text);
+          }
+        }),
+      );
     }
   });
+}
+
+/// Prints one line per test (PASS / FAIL and why), so the device logs show every result.
+Future<void> logged(String name, Future<void> Function() body) async {
+  try {
+    await body();
+    // ignore: avoid_print
+    print('RESULT PASS | $name');
+  } catch (e) {
+    // ignore: avoid_print
+    print('RESULT FAIL | $name | ${'$e'.split('\n').where((l) => l.trim().isNotEmpty).take(4).join(' / ')}');
+    rethrow;
+  }
 }
