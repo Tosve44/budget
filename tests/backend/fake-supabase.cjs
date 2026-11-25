@@ -245,7 +245,12 @@ async function storage(req, res, url, body, claims) {
   const file = (n) => path.join(STORE_DIR, bucket, n.replace(/\.\./g, '_'));
   if (req.method === 'POST' || req.method === 'PUT') {
     const data = parseMultipart(body, req.headers['content-type']);
-    const limit = await pool.query('select file_size_limit from storage.buckets where id = $1', [bucket]);
+    const limit = await pool.query('select file_size_limit, allowed_mime_types from storage.buckets where id = $1', [bucket]);
+    const mime = /multipart/.test(req.headers['content-type'] || '') ? (/Content-Type: *([^\r\n;]+)/i.exec(body.toString('latin1'))?.[1] || 'image/jpeg') : (req.headers['content-type'] || '').split(';')[0];
+    const allowed = limit.rows[0]?.allowed_mime_types;
+    if (allowed && !allowed.includes(mime.trim())) {
+      return send(res, 415, { statusCode: '415', error: 'invalid_mime_type', message: `mime type ${mime} is not supported` });
+    }
     if (limit.rows[0]?.file_size_limit && data.length > Number(limit.rows[0].file_size_limit)) {
       return send(res, 413, { statusCode: '413', error: 'Payload too large', message: 'The object exceeded the maximum allowed size' });
     }

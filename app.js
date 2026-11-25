@@ -1,9 +1,10 @@
-import { Store, toCents, monthKey, todayKey, shiftMonth, uid, normalizeItem } from './store.js';
+import { Store, LIMITS, toCents, monthKey, todayKey, shiftMonth, uid, normalizeItem } from './store.js';
 import { putPhoto, getPhoto, deletePhoto, compressImage } from './photos.js';
 import { readReceiptText, parseReceipt, findTotal } from './receipt.js';
 import { startCloud, loadPhoto } from './cloud.js';
 
 const store = new Store();
+window.__budgetStore = store; // lets the automated tests simulate sync events
 const state = { tab: 'personal', month: monthKey(), filterCat: null };
 let sync = null; // set when the app is connected to Supabase (see cloud.js)
 
@@ -98,7 +99,7 @@ function renderSpace(space) {
     const right = c.kind === 'expense' && c.budget
       ? `${money(spent)} <small>/ ${money(c.budget)}</small>`
       : money(spent);
-    return `<li class="cat-row ${state.filterCat === c.id ? 'selected' : ''}"><button data-cat="${c.id}">
+    return `<li class="cat-row ${state.filterCat === c.id ? 'selected' : ''}"><button data-cat="${esc(c.id)}">
       <div class="cat-top"><span class="cat-name">${esc(c.name)}</span><span class="cat-amt">${right}</span></div>
       ${c.kind === 'expense' && c.budget ? `<div class="bar ${cls}"><i style="width:${p}%"></i></div>` : ''}
     </button></li>`;
@@ -116,7 +117,7 @@ function renderSpace(space) {
   const txRows = txs.map((t) => {
     const c = store.category(t.categoryId);
     const meta = [dayLabel(t.date), t.items?.length ? `🧾 ${t.items.length} items` : (t.receiptId ? '🧾' : null), t.note, showWho ? store.user(t.createdBy)?.name : null].filter(Boolean).map(esc).join(' · ');
-    return `<li class="tx"><button data-tx="${t.id}">
+    return `<li class="tx"><button data-tx="${esc(t.id)}">
       <div class="tx-main"><div class="tx-cat">${esc(c ? c.name : 'Deleted category')}</div><div class="tx-meta">${meta}</div></div>
       <div class="tx-amt ${t.kind === 'income' ? 'income' : ''}">${t.kind === 'income' ? '+' : '−'}${money(t.amount)}</div>
     </button></li>`;
@@ -168,7 +169,7 @@ function timeAgo(iso) {
 // The "Share with your partner" card in Settings: sign in, then create or join a household.
 function syncCardHtml() {
   const whoCard = `<section class="card"><h2>Who is using this phone</h2>
-      <div class="users">${store.data.users.map((u) => `<button data-user="${u.id}" class="${u.id === store.currentUser.id ? 'on' : ''}">${esc(u.name)}</button>`).join('')}</div>
+      <div class="users">${store.data.users.map((u) => `<button data-user="${esc(u.id)}" class="${u.id === store.currentUser.id ? 'on' : ''}">${esc(u.name)}</button>`).join('')}</div>
       <p class="note">${sync ? 'Pick your name before you sign in below.' : 'Data is saved only on this phone. Syncing between phones is not set up in this version.'}</p>
     </section>`;
   if (sync && !sync.connected) return whoCard + syncCardInner();
@@ -179,7 +180,7 @@ function syncCardHtml() {
 function syncCardInner() {
   if (!sync) {
     return `<section class="card"><h2>Who is using this phone</h2>
-      <div class="users">${store.data.users.map((u) => `<button data-user="${u.id}" class="${u.id === store.currentUser.id ? 'on' : ''}">${esc(u.name)}</button>`).join('')}</div>
+      <div class="users">${store.data.users.map((u) => `<button data-user="${esc(u.id)}" class="${u.id === store.currentUser.id ? 'on' : ''}">${esc(u.name)}</button>`).join('')}</div>
       <p class="note">Data is saved only on this phone. Syncing between phones is not set up in this version.</p>
     </section>`;
   }
@@ -200,7 +201,7 @@ function syncCardInner() {
   if (st.step === 'household') {
     return `<section class="card" id="syncCard"><h2>Sharing with your partner</h2>
       <p class="note" style="margin:0 0 10px">Signed in. Now start a household, or join your partner's with their code.</p>
-      <label class="field"><span>Your name</span><input id="dispName" value="${esc(st.name || store.currentUser.name || '')}" autocomplete="nickname"></label>
+      <label class="field"><span>Your name</span><input id="dispName" maxlength="40" value="${esc(st.name || store.currentUser.name || '')}" autocomplete="nickname"></label>
       ${err}
       <button class="primary" id="createHh" ${busy}>Start a new household</button>
       <p class="note" style="text-align:center;margin:10px 0">or</p>
@@ -274,12 +275,12 @@ function renderSettings() {
         <li class="${c.archived ? 'archived' : ''}">
           <span class="name">${esc(c.name)}<small>${c.archived ? 'Hidden' : kind === 'expense' ? (c.budget ? `Budget ${money(c.budget)} / month` : 'No budget') : 'Income'}</small></span>
           <span class="actions">
-            <button class="mini" data-move="${c.id}" data-dir="-1" aria-label="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
-            <button class="mini" data-move="${c.id}" data-dir="1" aria-label="Move down" ${i === list.length - 1 ? 'disabled' : ''}>↓</button>
-            <button class="mini" data-editcat="${c.id}">Edit</button>
+            <button class="mini" data-move="${esc(c.id)}" data-dir="-1" aria-label="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
+            <button class="mini" data-move="${esc(c.id)}" data-dir="1" aria-label="Move down" ${i === list.length - 1 ? 'disabled' : ''}>↓</button>
+            <button class="mini" data-editcat="${esc(c.id)}">Edit</button>
           </span>
         </li>`).join('')}</ul>
-        <button class="secondary" data-addcat="${space.id}" data-kind="${kind}">Add ${kind} category</button>`;
+        <button class="secondary" data-addcat="${esc(space.id)}" data-kind="${kind}">Add ${kind} category</button>`;
     };
     return `<section class="card"><h2>${title}</h2>${group('expense', 'Expenses')}${group('income', 'Income')}</section>`;
   };
@@ -287,10 +288,10 @@ function renderSettings() {
   view.innerHTML = `
     ${syncCardHtml()}
     <section class="card"><h2>Currency</h2>
-      <label class="field"><select id="currency">${CURRENCIES.map((c) => `<option ${c === store.data.settings.currency ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
+      <label class="field"><select id="currency" aria-label="Currency">${CURRENCIES.map((c) => `<option ${c === store.data.settings.currency ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
     </section>
     <section class="card"><h2>Receipt language</h2>
-      <label class="field"><select id="ocrLang">${RECEIPT_LANGS.map(([v, l]) => `<option value="${v}" ${v === (store.data.settings.receiptLang || 'slv+eng') ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="field"><select id="ocrLang" aria-label="Receipt language">${RECEIPT_LANGS.map(([v, l]) => `<option value="${v}" ${v === (store.data.settings.receiptLang || 'slv+eng') ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <p class="note">Receipts are read on this phone. When you are signed in, the photo is also saved to your account, so House receipts are visible to both of you.</p>
     </section>
     ${catSection(store.personalSpace(), `${esc(me.name)}'s personal categories`)}
@@ -341,18 +342,18 @@ function openTxSheet(tx) {
   const defaultDate = tx ? tx.date : (state.month === monthKey() ? todayKey() : `${state.month}-01`);
 
   const chipsHtml = () => store.categories(space.id).filter((c) => c.kind === kind)
-    .map((c) => `<button type="button" class="chip ${c.id === categoryId ? 'on' : ''}" data-chip="${c.id}">${esc(c.name)}</button>`).join('');
+    .map((c) => `<button type="button" class="chip ${c.id === categoryId ? 'on' : ''}" data-chip="${esc(c.id)}">${esc(c.name)}</button>`).join('');
 
   openSheet(`
     <div class="sheet-head"><button class="link-btn" data-close>Cancel</button>
       <h3>${tx ? 'Edit entry' : `Add to ${esc(space.type === 'house' ? 'House' : 'Personal')}`}</h3>
       <button class="link-btn" id="saveTx">Save</button></div>
     <div class="seg"><button type="button" data-kind="expense">Expense</button><button type="button" data-kind="income">Income</button></div>
-    <input class="amount-input" id="amount" inputmode="decimal" placeholder="0" autocomplete="off" value="${tx ? centsToInput(tx.amount) : ''}">
+    <input class="amount-input" id="amount" aria-label="Amount" inputmode="decimal" placeholder="0" autocomplete="off" value="${tx ? centsToInput(tx.amount) : ''}">
     <div class="chips" id="chips"></div>
     <div class="row2">
       <label class="field"><span>Date</span><input type="date" id="date" value="${defaultDate}"></label>
-      <label class="field"><span>Note</span><input id="note" placeholder="Optional" value="${tx ? esc(tx.note) : ''}"></label>
+      <label class="field"><span>Note</span><input id="note" maxlength="${LIMITS.note}" placeholder="Optional" value="${tx ? esc(tx.note) : ''}"></label>
     </div>
     <div id="receiptBox" class="receipt-box">
       <div class="receipt-top">
@@ -388,8 +389,8 @@ function openTxSheet(tx) {
     const itemsTotal = () => items.reduce((s, it) => s + (it.price || 0), 0);
     const paintItems = () => {
       const rows = items.map((it, i) => `<li class="item-row">
-          <input class="item-name" data-i="${i}" data-f="name" value="${esc(it.name)}" placeholder="Item" list="itemNames" autocomplete="off">
-          <input class="item-price" data-i="${i}" data-f="price" value="${centsToInput(it.price)}" placeholder="0" inputmode="decimal" autocomplete="off">
+          <input class="item-name" aria-label="Item name" maxlength="${LIMITS.itemName}" data-i="${i}" data-f="name" value="${esc(it.name)}" placeholder="Item" list="itemNames" autocomplete="off">
+          <input class="item-price" aria-label="Item price" data-i="${i}" data-f="price" value="${centsToInput(it.price)}" placeholder="0" inputmode="decimal" autocomplete="off">
           <button type="button" class="mini" data-rm="${i}" aria-label="Remove item">✕</button>
           <div class="item-cmp" data-cmp="${i}">${cmpHtml(it)}</div>
         </li>`).join('');
@@ -469,12 +470,16 @@ function openTxSheet(tx) {
       paintItems();
     });
 
+    let saving = false;
     const save = async () => {
+      if (saving) return; // a double tap must not save the entry twice
       const amount = toCents($('#amount', root).value);
       const date = $('#date', root).value;
       if (!(amount > 0)) { toast('Enter an amount'); return; }
+      if (amount >= LIMITS.amount) { toast('That amount is too large. Check the amount.'); return; }
       if (!categoryId) { toast('Pick a category'); return; }
       if (!date) { toast('Pick a date'); return; }
+      saving = true;
       const cleanItems = kind === 'expense' ? items.filter((it) => it.name && it.price > 0).map((it) => ({ name: it.name, price: it.price })) : [];
       if (newPhoto) {
         try {
@@ -485,11 +490,16 @@ function openTxSheet(tx) {
       }
       const payload = { spaceId: space.id, categoryId, kind, amount, date, note: $('#note', root).value.trim() };
       if (kind === 'expense') { payload.items = cleanItems; payload.receiptId = receiptId; }
-      if (tx) store.updateTransaction(tx.id, payload); else store.addTransaction(payload);
+      let msg = tx ? 'Saved' : 'Added';
+      if (tx && !store.updateTransaction(tx.id, payload)) {
+        // The other phone deleted this entry while it was open here: keep this person's edit.
+        store.addTransaction(payload);
+        msg = 'This entry was deleted on the other phone, so it was saved again as a new entry.';
+      } else if (!tx) store.addTransaction(payload);
       state.month = date.slice(0, 7);
       sheet.close();
       render();
-      toast(tx ? 'Saved' : 'Added');
+      if (!store.saveFailed) toast(msg);
     };
     $('#saveTx', root).addEventListener('click', save);
     $('#saveTx2', root).addEventListener('click', save);
@@ -532,7 +542,7 @@ function renderPrices() {
   view.innerHTML = `
     <section class="card"><h2>Grocery prices over time</h2>
       <p class="note" style="margin:0 0 10px">Every item from your receipts, newest first. The % is the change since the first time you bought it. Tap an item for its history.</p>
-      <label class="field"><input id="priceSearch" type="search" placeholder="Search items" value="${esc(state.priceQuery || '')}"></label>
+      <label class="field"><input id="priceSearch" type="search" aria-label="Search items" placeholder="Search items" value="${esc(state.priceQuery || '')}"></label>
       ${rows ? `<ul class="tx-list">${rows}</ul>` : '<p class="empty-note">No items yet. Add a receipt photo to an expense and the items will show up here.</p>'}
     </section>`;
   const search = $('#priceSearch');
@@ -553,7 +563,7 @@ function openCategorySheet({ cat, spaceId, kind }) {
   openSheet(`
     <div class="sheet-head"><button class="link-btn" data-close>Cancel</button>
       <h3>${isNew ? 'New category' : 'Edit category'}</h3><button class="link-btn" id="saveCat">Save</button></div>
-    <label class="field"><span>Name</span><input id="catName" value="${cat ? esc(cat.name) : ''}" placeholder="e.g. Pets"></label>
+    <label class="field"><span>Name</span><input id="catName" maxlength="${LIMITS.categoryName}" value="${cat ? esc(cat.name) : ''}" placeholder="e.g. Pets"></label>
     ${k === 'expense' ? `<label class="field"><span>Monthly budget (leave empty for none)</span><input id="catBudget" inputmode="decimal" value="${cat ? centsToInput(cat.budget) : ''}" placeholder="0"></label>` : ''}
     <button class="primary" id="saveCat2">Save</button>
     ${cat ? `<button class="secondary" id="archCat">${cat.archived ? 'Show again' : 'Hide category'}</button>
@@ -565,6 +575,7 @@ function openCategorySheet({ cat, spaceId, kind }) {
       const budgetRaw = $('#catBudget', root)?.value ?? '';
       const budget = budgetRaw.trim() ? toCents(budgetRaw) : 0;
       if (Number.isNaN(budget) || budget < 0) { toast('Budget must be a number'); return; }
+      if (budget >= LIMITS.amount) { toast('That budget is too large'); return; }
       if (isNew) store.addCategory({ spaceId, name, kind: k, budget }); else store.updateCategory(cat.id, { name, budget });
       sheet.close();
     };
@@ -614,6 +625,22 @@ $('#prevMonth').addEventListener('click', () => { state.month = shiftMonth(state
 $('#nextMonth').addEventListener('click', () => { state.month = shiftMonth(state.month, 1); state.filterCat = null; render(); });
 $('#addBtn').addEventListener('click', () => openTxSheet(null));
 store.subscribe(render);
+store.subscribe(() => {
+  if (store.saveFailed) storageWarning();
+});
+let storageWarned = 0;
+function storageWarning() {
+  if (Date.now() - storageWarned < 5000) return;
+  storageWarned = Date.now();
+  const el = document.createElement('div');
+  el.className = 'toast toast-alert';
+  el.setAttribute('role', 'alert');
+  el.textContent = sync?.connected
+    ? 'Phone storage is full. Your changes are kept in your account, but free up space on the phone.'
+    : 'Phone storage is full, so this change could not be saved. Free up space, or download a backup in Settings.';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 8000);
+}
 render();
 
 startCloud(store).then(async (s) => {

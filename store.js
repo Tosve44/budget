@@ -17,6 +17,8 @@
 
 const STORAGE_KEY = 'budget.v1';
 export const SCHEMA_VERSION = 1;
+// Limits that match the cloud database, so a row the phone saves can always be uploaded.
+export const LIMITS = { amount: 1000000000, note: 500, categoryName: 60, items: 300, itemName: 120 }; // amount: 10 million, in cents
 
 const PERSONAL_EXPENSES = [
   'Car', 'Rent', 'Groceries', 'Food & Drinks', 'Lunch at work', 'Nicotine', 'Gym & Sports',
@@ -88,19 +90,24 @@ export class Store {
   _changed(table, id, deletedRow) { if (this.onLocalChange) this.onLocalChange(table, id, deletedRow); }
 
   load() {
+    let raw = null;
     try {
-      const raw = this.storage && this.storage.getItem(STORAGE_KEY);
+      raw = this.storage && this.storage.getItem(STORAGE_KEY);
       if (raw) return validateData(JSON.parse(raw));
     } catch (e) {
       console.warn('Could not load saved data, starting fresh.', e);
+      // Keep the damaged copy, so it can still be rescued from a backup or by hand.
+      try { if (raw) this.storage.setItem(`${STORAGE_KEY}.damaged`, raw); } catch {}
     }
     return createInitialData();
   }
 
   save() {
+    this.saveFailed = false;
     try { this.storage && this.storage.setItem(STORAGE_KEY, JSON.stringify(this.data)); }
-    catch (e) { console.warn('Could not save data.', e); }
+    catch (e) { console.warn('Could not save data.', e); this.saveFailed = true; }
     this.listeners.forEach((fn) => fn(this.data));
+    return !this.saveFailed;
   }
 
   subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -145,8 +152,8 @@ export class Store {
 
   addTransaction({ spaceId, categoryId, kind, amount, date, note, items, receiptId }) {
     const now = new Date().toISOString();
-    const t = { id: uid('tx'), spaceId, categoryId, kind, amount, date, note: note || '', createdBy: this.currentUser.id, createdAt: now, updatedAt: now };
-    if (items && items.length) t.items = items;
+    const t = { id: uid('tx'), spaceId, categoryId, kind, amount, date, note: clip(note, LIMITS.note), createdBy: this.currentUser.id, createdAt: now, updatedAt: now };
+    if (items && items.length) t.items = cleanItems(items);
     if (receiptId) t.receiptId = receiptId;
     this.data.transactions.push(t);
     this._changed('transactions', t.id);
@@ -156,10 +163,13 @@ export class Store {
 
   updateTransaction(id, patch) {
     const t = this.data.transactions.find((x) => x.id === id);
-    if (!t) return;
+    if (!t) return null;
+    if ('note' in patch) patch = { ...patch, note: clip(patch.note, LIMITS.note) };
+    if (patch.items) patch = { ...patch, items: cleanItems(patch.items) };
     Object.assign(t, patch, { updatedAt: new Date().toISOString() });
     this._changed('transactions', id);
     this.save();
+    return t;
   }
 
   deleteTransaction(id) {
@@ -172,7 +182,7 @@ export class Store {
 
   addCategory({ spaceId, name, kind, budget = 0 }) {
     const order = Math.max(-1, ...this.data.categories.map((c) => c.order)) + 1;
-    const c = { id: uid('cat'), spaceId, name, kind, budget, order, archived: false, updatedAt: new Date().toISOString() };
+    const c = { id: uid('cat'), spaceId, name: clip(name, LIMITS.categoryName), kind, budget, order, archived: false, updatedAt: new Date().toISOString() };
     this.data.categories.push(c);
     this._changed('categories', c.id);
     this.save();
@@ -182,6 +192,7 @@ export class Store {
   updateCategory(id, patch) {
     const c = this.category(id);
     if (!c) return;
+    if ('name' in patch) patch = { ...patch, name: clip(patch.name, LIMITS.categoryName) };
     Object.assign(c, patch, { updatedAt: new Date().toISOString() });
     this._changed('categories', id);
     this.save();
@@ -245,18 +256,26 @@ export class Store {
 }
 
 // ---- helpers shared with the UI ----
+function clip(s, max) { return String(s || '').slice(0, max); }
+function cleanItems(items) {
+  return items.slice(0, LIMITS.items).map((it) => ({ ...it, name: clip(it.name, LIMITS.itemName) }));
+}
+
 export function toCents(input) {
   if (typeof input === 'number') return Math.round(input * 100);
-  const s = String(input).trim().replace(/\s/g, '');
-  if (!s) return NaN;
-  // Accept both "12,50" and "12.50"; treat the last separator as the decimal point.
+  const s = String(input).trim().replace(/[\s\u00a0\u202f']/g, '').replace(/€|eur$/i, '');
+  if (!/^\d[\d.,]*$|^[.,]\d+$/.test(s)) return NaN;
+  // Accept "12,50" and "12.50"; the last separator is the decimal point, except a dot followed by
+  // exactly three digits, which is the Slovenian thousands separator ("1.000" is one thousand).
   const lastSep = Math.max(s.lastIndexOf(','), s.lastIndexOf('.'));
   let normalized;
   if (lastSep === -1) normalized = s;
   else {
     const intPart = s.slice(0, lastSep).replace(/[.,]/g, '');
     const frac = s.slice(lastSep + 1);
-    normalized = `${intPart}.${frac}`;
+    const mixed = s.includes(',') && s.includes('.');
+    if (s[lastSep] === '.' && frac.length === 3 && !mixed && intPart && Number(intPart) > 0) normalized = intPart + frac;
+    else normalized = `${intPart || '0'}.${frac}`;
   }
   const n = Number(normalized);
   return Number.isFinite(n) ? Math.round(n * 100) : NaN;
