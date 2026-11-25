@@ -75,8 +75,31 @@ final class BudgetUITests: XCTestCase {
         XCTAssertTrue(app.buttons["category.Groceries"].exists, "category shows up under spending")
 
         addEntry(amount: "2000", category: "Salary", kind: "Income")
-        XCTAssertTrue(text("stat.Income").contains("2.000"), text("stat.Income"))
+        let income = app.buttons["addIncome"].value as? String ?? ""
+        XCTAssertTrue(income.contains("2.000"), income)
         XCTAssertTrue(text("spentAmount").contains("12,50"), "income does not count as spending")
+    }
+
+    func testTappingIncomeOrSpentOpensTheRightAddScreen() {
+        launch()
+        app.buttons["addIncome"].tap()
+        XCTAssertTrue(app.textFields["amountField"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.segmentedControls.buttons["Income"].isSelected, "income is preselected")
+        app.textFields["amountField"].typeText("1500")
+        pick("Salary")
+        app.buttons["saveEntry"].tap()
+        XCTAssertTrue(app.buttons["addIncome"].waitForExistence(timeout: 5), "editor closed")
+        XCTAssertTrue((app.buttons["addIncome"].value as? String ?? "").contains("1.500"))
+
+        app.buttons["addExpense"].tap()
+        XCTAssertTrue(app.textFields["amountField"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.segmentedControls.buttons["Expense"].isSelected, "expense is preselected")
+        app.textFields["amountField"].typeText("9,99")
+        pick("Groceries")
+        app.buttons["saveEntry"].tap()
+        XCTAssertTrue(app.buttons["addExpense"].waitForExistence(timeout: 5))
+        XCTAssertTrue(text("spentAmount").contains("9,99"))
+        XCTAssertEqual(entries().count, 2)
     }
 
     func testCannotSaveWithoutAmountOrCategory() {

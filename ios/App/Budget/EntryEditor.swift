@@ -18,8 +18,8 @@ struct EntryEditor: View {
 
     init(sheet: EntrySheet, defaultDate: String) {
         switch sheet {
-        case .new(let spaceId):
-            _draft = State(initialValue: EntryDraft(spaceId: spaceId, date: defaultDate))
+        case .new(let spaceId, let kind):
+            _draft = State(initialValue: EntryDraft(spaceId: spaceId, kind: kind, date: defaultDate))
             isNew = true
         case .edit(let t):
             _draft = State(initialValue: EntryDraft(editing: t))
@@ -68,7 +68,7 @@ struct EntryEditor: View {
                     }
                 }
             }
-            .navigationTitle(isNew ? "New entry" : "Edit entry")
+            .navigationTitle(isNew ? (draft.kind == .income ? "New income" : "New expense") : "Edit entry")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

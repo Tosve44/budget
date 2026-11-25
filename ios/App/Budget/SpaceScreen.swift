@@ -56,7 +56,7 @@ struct SpaceScreen: View {
         List {
             Section {
                 MonthSwitcher(month: $month)
-                SummaryCard(sum: sum)
+                SummaryCard(sum: sum) { kind in sheet = .new(spaceId: space.id, kind: kind) }
             }
             Section("Spending by category") {
                 if activeExpense.isEmpty {
@@ -122,11 +122,11 @@ struct SpaceScreen: View {
 }
 
 enum EntrySheet: Identifiable {
-    case new(spaceId: String)
+    case new(spaceId: String, kind: EntryKind = .expense)
     case edit(Entry)
     var id: String {
         switch self {
-        case .new(let sp): return "new-\(sp)"
+        case .new(let sp, let kind): return "new-\(sp)-\(kind.rawValue)"
         case .edit(let t): return t.id
         }
     }
@@ -157,6 +157,8 @@ struct MonthSwitcher: View {
 struct SummaryCard: View {
     @Environment(AppModel.self) private var model
     let sum: MonthSummary
+    /// Tapping Income or Spent opens the add screen for that kind of entry.
+    var onAdd: (EntryKind) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -179,12 +181,31 @@ struct SummaryCard: View {
                 Text("No monthly budget set yet. Add one per category in Settings.").font(.footnote).foregroundStyle(.secondary)
             }
             HStack {
-                stat("Income", model.money(sum.income), Color.green)
-                stat("Spent", model.money(sum.spent), Color.primary)
+                addButton(.income, "Income", model.money(sum.income), Color.green)
+                addButton(.expense, "Spent", model.money(sum.spent), Color.primary)
                 stat("Budget", sum.budget > 0 ? model.money(sum.budget) : "–", Color.primary)
             }
         }
         .padding(.vertical, 4)
+    }
+
+    /// Borderless, so each one reacts on its own inside the list row.
+    func addButton(_ kind: EntryKind, _ label: String, _ value: String, _ color: Color) -> some View {
+        Button { onAdd(kind) } label: {
+            HStack(spacing: 2) {
+                stat(label, value, color)
+                Image(systemName: "plus.circle").font(.caption).foregroundStyle(.tint)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(value)
+        .accessibilityHint(kind == .income ? "Adds income" : "Adds an expense")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier(kind == .income ? "addIncome" : "addExpense")
     }
 
     func stat(_ label: String, _ value: String, _ color: Color) -> some View {
