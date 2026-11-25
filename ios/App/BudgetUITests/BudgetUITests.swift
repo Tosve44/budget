@@ -344,7 +344,8 @@ final class BudgetUITests: XCTestCase {
         let field = app.textFields["amountField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText("3")
-        pick("Gas")
+        // With the biggest text only the first few categories fit on screen; Car is first.
+        pick("Car")
         screenshot("largest text - add entry")
         XCTAssertTrue(app.buttons["saveEntry"].isHittable, "Save can be reached")
         app.buttons["saveEntry"].tap()
