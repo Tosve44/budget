@@ -35,8 +35,13 @@ Future<void> reveal(WidgetTester tester, Finder f) async {
 
 Future<void> tapKey(WidgetTester tester, String key) async {
   final f = find.byKey(Key(key));
-  await reveal(tester, f);
-  await tester.pumpAndSettle();
+  // On a real phone the keyboard can open or close meanwhile and move things around, so the
+  // widget is looked up again right before the tap.
+  for (var attempt = 0; ; attempt++) {
+    await reveal(tester, f);
+    await tester.pumpAndSettle();
+    if (f.evaluate().isNotEmpty || attempt == 2) break;
+  }
   await tester.tap(f.first);
   await tester.pumpAndSettle();
 }
@@ -46,6 +51,9 @@ Future<void> typeInto(WidgetTester tester, String key, String text) async {
   await reveal(tester, f);
   await tester.enterText(f.first, text);
   await tester.pumpAndSettle();
+  await reveal(tester, f);
+  final typed = tester.widget<TextField>(find.descendant(of: f.first, matching: find.byType(TextField), matchRoot: true).first).controller?.text;
+  expect(typed, text, reason: 'typing into $key');
 }
 
 Future<void> tapText(WidgetTester tester, String text) async {
@@ -149,7 +157,14 @@ final flows = <String, Future<void> Function(WidgetTester)>{
     expect(find.text('Edit entry'), findsOneWidget);
     await typeInto(tester, 'noteField', 'changed note');
     await tapKey(tester, 'saveEntry');
-    expect(model.store.data.transactions.where((t) => t.note == 'changed note').length, 1);
+    expect(
+      model.store.data.transactions.where((t) => t.note == 'changed note').length,
+      1,
+      reason:
+          'still editing: ${find.text('Edit entry').evaluate().isNotEmpty}, '
+          'problem: ${find.byKey(const Key('formProblem')).evaluate().map((e) => (e.widget as Text).data).join()}, '
+          'notes: ${model.store.data.transactions.map((t) => t.note).toList()}',
+    );
     await tapKey(tester, 'entry');
     await tapKey(tester, 'deleteEntry');
     await tapKey(tester, 'confirmYes');
