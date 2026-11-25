@@ -23,10 +23,14 @@ final class BudgetUITests: XCTestCase {
     func tab(_ name: String) { app.tabBars.buttons[name].tap() }
 
     func addEntry(amount: String, category: String, kind: String = "Expense", note: String? = nil) {
-        app.buttons["addEntry"].tap()
-        if kind != "Expense" { app.segmentedControls.buttons[kind].tap() }
+        let add = app.buttons["addEntry"]
+        XCTAssertTrue(add.waitForExistence(timeout: 15), "app ready")
+        add.tap()
         let field = app.textFields["amountField"]
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        // A freshly booted simulator can be slow to open the first sheet; tap again if it missed.
+        if !field.waitForExistence(timeout: 10), add.isHittable { add.tap() }
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "add screen opened")
+        if kind != "Expense" { app.segmentedControls.buttons[kind].tap() }
         field.tap()
         field.typeText(amount)
         pick(category)
