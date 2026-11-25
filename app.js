@@ -451,8 +451,8 @@ function openTxSheet(tx, preset = {}) {
       status.hidden = false;
       status.textContent = 'Reading the receipt on your phone… (first time takes longer)';
       try {
-        const text = await readReceiptText(file, store.data.settings.receiptLang || 'slv+eng', (p) => {
-          status.textContent = `Reading the receipt… ${Math.round(p * 100)}%`;
+        const text = await readReceiptText(file, store.data.settings.receiptLang || 'slv+eng', (p, attempt) => {
+          status.textContent = attempt ? `Hard to read, trying another way (${attempt + 1})… ${Math.round(p * 100)}%` : `Reading the receipt… ${Math.round(p * 100)}%`;
         });
         console.debug('Receipt text:', text);
         const found = parseReceipt(text);
