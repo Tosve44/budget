@@ -56,6 +56,9 @@ jobs:
             device: iPhone-SE-3rd-generation
           - name: large iPhone
             device: iPhone-16-Pro-Max
+          - name: iOS 17
+            device: iPhone-15
+            ios: iOS-17-5
     steps:
       - uses: actions/checkout@v4
       - run: brew install xcodegen

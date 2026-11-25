@@ -2,7 +2,7 @@
 # For GitHub's Macs: makes an iPhone simulator of the given model and prints its id.
 # Downloads the iPhone simulator system first if the Mac has none.
 #
-#   scripts/ci-simulator.sh iPhone-SE-3rd-generation [iOS-17]
+#   scripts/ci-simulator.sh iPhone-SE-3rd-generation [iOS-17-5]
 #
 # The second argument picks the iOS version (newest installed if left out).
 set -euo pipefail
@@ -26,7 +26,7 @@ RT="$(pick_runtime)"
 if [ -z "$RT" ]; then
   echo "No matching iPhone simulator system installed; downloading one." >&2
   if [ -n "$WANT" ]; then
-    xcodebuild -downloadPlatform iOS -buildVersion "${WANT#iOS-}" >&2 || true
+    V="${WANT#iOS-}"; xcodebuild -downloadPlatform iOS -buildVersion "${V//-/.}" >&2 || true
   else
     xcodebuild -downloadPlatform iOS >&2 || true
   fi

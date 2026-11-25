@@ -304,6 +304,93 @@ final class BudgetUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Sharing is not switched on'")).firstMatch.waitForExistence(timeout: 3))
     }
 
+    // MARK: looks and edge cases
+
+    func screenshot(_ name: String) {
+        let a = XCTAttachment(screenshot: app.screenshot())
+        a.name = name
+        a.lifetime = .keepAlways
+        add(a)
+    }
+
+    func tour(_ label: String) {
+        for t in ["Personal", "House", "Prices", "Settings"] {
+            tab(t)
+            XCTAssertTrue(app.navigationBars[t].waitForExistence(timeout: 5), "\(t) opens (\(label))")
+            screenshot("\(label) - \(t)")
+        }
+        tab("Personal")
+    }
+
+    func testDarkMode() {
+        XCUIDevice.shared.appearance = .dark
+        defer { XCUIDevice.shared.appearance = .light }
+        launch(["-demo-data"])
+        tour("dark")
+        addEntry(amount: "4,20", category: "Lunch at work")
+        XCTAssertTrue(entries().firstMatch.exists)
+        app.buttons["addEntry"].tap()
+        XCTAssertTrue(app.textFields["amountField"].waitForExistence(timeout: 5))
+        screenshot("dark - add entry")
+        app.buttons["Cancel"].tap()
+    }
+
+    func testVeryLargeText() {
+        launch(["-demo-data", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        tour("largest text")
+        // The main things still work with the biggest text setting.
+        XCTAssertTrue(app.buttons["addIncome"].exists && app.buttons["addExpense"].exists)
+        app.buttons["addExpense"].tap()
+        let field = app.textFields["amountField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText("3")
+        pick("Gas")
+        screenshot("largest text - add entry")
+        XCTAssertTrue(app.buttons["saveEntry"].isHittable, "Save can be reached")
+        app.buttons["saveEntry"].tap()
+        XCTAssertTrue(app.buttons["addEntry"].waitForExistence(timeout: 5), "editor closed")
+    }
+
+    func testSmallestText() {
+        launch(["-demo-data", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryXS"])
+        tour("smallest text")
+    }
+
+    func testTooBigAmountIsRefused() {
+        launch()
+        app.buttons["addEntry"].tap()
+        let field = app.textFields["amountField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText("10000000")
+        pick("Gas")
+        app.buttons["saveEntry"].tap()
+        XCTAssertEqual(text("formProblem"), "That amount is too big.")
+        app.buttons["Cancel"].tap()
+        XCTAssertEqual(entries().count, 0)
+    }
+
+    func testDotThousandsMeansAThousand() {
+        launch()
+        addEntry(amount: "1.000", category: "Salary", kind: "Income")
+        let income = app.buttons["addIncome"].value as? String ?? ""
+        XCTAssertTrue(income.contains("1.000"), "1.000 is one thousand euros: \(income)")
+    }
+
+    func testSameCategoryNameTwiceIsRefused() {
+        launch()
+        tab("Settings")
+        app.buttons["editPersonalCategories"].tap()
+        let add = app.buttons["addCategory.expense"]
+        scrollTo(add)
+        add.tap()
+        let name = app.textFields["categoryName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap()
+        name.typeText("groceries")
+        app.buttons["saveCategory"].tap()
+        XCTAssertEqual(text("categoryProblem"), "There is already a category called \"groceries\".")
+    }
+
     func testLaunchPerformance() {
         measure(metrics: [XCTApplicationLaunchMetric()]) { launch(["-demo-data"]) }
     }

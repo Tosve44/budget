@@ -259,7 +259,7 @@ struct CategoryEditor: View {
                         Text("How much you plan to spend in this category each month.")
                     }
                 }
-                if let problem { Text(problem).foregroundStyle(.red) }
+                if let problem { Text(problem).foregroundStyle(.red).accessibilityIdentifier("categoryProblem") }
                 if let c = category {
                     Section {
                         Button(c.archived ? "Show again" : "Hide category") {
