@@ -82,7 +82,7 @@ struct SpaceScreen: View {
                     Text("No entries yet. Tap + to add one.").foregroundStyle(.secondary)
                 }
                 ForEach(entries) { t in
-                    Button { sheet = .edit(t) } label: { EntryRow(entry: t, showWho: space.type == .house) }
+                    Button { sheet = .edit(t) } label: { EntryRow(entry: t, showWho: space.type == .house).contentShape(Rectangle()) }
                         .buttonStyle(.plain)
                         .swipeActions {
                             Button(role: .destructive) { model.store.deleteTransaction(t.id) } label: { Label("Delete", systemImage: "trash") }
@@ -114,6 +114,7 @@ struct SpaceScreen: View {
                     BudgetBar(spent: spent, budget: c.budget)
                 }
             }
+            .contentShape(Rectangle()) // the whole row reacts, not only the text
         }
         .buttonStyle(.plain)
         .listRowBackground(filterCategoryId == c.id ? Color.accentColor.opacity(0.12) : nil)

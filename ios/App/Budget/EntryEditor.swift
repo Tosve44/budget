@@ -122,10 +122,12 @@ struct EntryEditor: View {
                     Button {
                         if AppConfig.flag("-fake-receipt") { Task { await readSample() } } else { showScanner = true }
                     } label: { Label("Scan receipt", systemImage: "doc.viewfinder") }
+                        .buttonStyle(.borderless) // two buttons in one row: each must react on its own
                         .accessibilityIdentifier("scanReceipt")
                     Spacer()
                     PhotosPicker(selection: $photoItem, matching: .images) { Label("From photos", systemImage: "photo") }
                         .labelStyle(.iconOnly)
+                        .buttonStyle(.borderless)
                         .accessibilityLabel("Receipt from photos")
                 }
             }

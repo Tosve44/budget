@@ -204,6 +204,7 @@ struct CategoriesScreen: View {
                                 Spacer()
                                 if c.kind == .expense { Text(c.budget > 0 ? model.money(c.budget) : "no budget").foregroundStyle(.secondary) }
                             }
+                            .contentShape(Rectangle()) // the whole row reacts, not only the text
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("categoryRow.\(c.name)")
@@ -240,11 +241,13 @@ struct CategoryEditor: View {
     @State private var name = ""
     @State private var budgetText = ""
     @State private var problem: String?
+    @FocusState private var nameFocused: Bool
 
     var body: some View {
         NavigationStack {
             Form {
                 TextField("Name, e.g. Pets", text: $name)
+                    .focused($nameFocused)
                     .disabled(category != nil && !PlanRules.canRenameCategory(plan: model.plan))
                     .accessibilityIdentifier("categoryName")
                 if kind == .expense {
@@ -278,6 +281,7 @@ struct CategoryEditor: View {
             .onAppear {
                 name = category?.name ?? ""
                 budgetText = Money.inputText(category?.budget ?? 0)
+                if category == nil { nameFocused = true }
             }
         }
     }

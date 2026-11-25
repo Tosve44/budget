@@ -182,6 +182,7 @@ final class BudgetUITests: XCTestCase {
         app.buttons["editPersonalCategories"].tap()
         app.buttons["categoryRow.Groceries"].tap()
         let budget = app.textFields["categoryBudget"]
+        XCTAssertTrue(budget.waitForExistence(timeout: 5), "tapping a category opens its editor")
         budget.tap()
         budget.typeText("300")
         app.buttons["saveCategory"].tap()
@@ -199,6 +200,7 @@ final class BudgetUITests: XCTestCase {
         tab("Settings")
         app.buttons["editPersonalCategories"].tap()
         app.buttons["categoryRow.Nicotine"].tap()
+        XCTAssertTrue(app.buttons["toggleHidden"].waitForExistence(timeout: 5))
         app.buttons["toggleHidden"].tap()
         tab("Personal")
         app.buttons["addEntry"].tap()
@@ -214,7 +216,10 @@ final class BudgetUITests: XCTestCase {
         let add = app.buttons["addCategory.expense"]
         scrollTo(add)
         add.tap()
-        app.textFields["categoryName"].typeText("Pets")
+        let name = app.textFields["categoryName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap()
+        name.typeText("Pets")
         app.buttons["saveCategory"].tap()
         XCTAssertTrue(app.buttons["categoryRow.Pets"].waitForExistence(timeout: 3))
         tab("House")
@@ -251,6 +256,7 @@ final class BudgetUITests: XCTestCase {
         launch(["-demo-data"])
         let all = entries().count
         app.buttons["category.Groceries"].tap()
+        XCTAssertTrue(app.buttons["clearFilter"].waitForExistence(timeout: 5))
         XCTAssertEqual(entries().count, 1)
         app.buttons["clearFilter"].tap()
         XCTAssertEqual(entries().count, all)
