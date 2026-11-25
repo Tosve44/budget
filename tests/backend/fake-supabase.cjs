@@ -231,6 +231,13 @@ function parseMultipart(buf, contentType) {
 }
 
 async function storage(req, res, url, body, claims) {
+  const lm = /^\/storage\/v1\/object\/list\/([^/]+)$/.exec(url.pathname);
+  if (lm && req.method === 'POST') {
+    const { prefix = '' } = JSON.parse(body.toString() || '{}');
+    const p = prefix.replace(/\/$/, '') + '/';
+    const rows = await asRole(claims, (c) => c.query('select id, name, created_at, updated_at, metadata from storage.objects where bucket_id = $1 and name like $2 order by name', [lm[1], p + '%']));
+    return send(res, 200, rows.rows.map((r) => ({ ...r, name: r.name.slice(p.length) })));
+  }
   const m = /^\/storage\/v1\/object(?:\/authenticated)?\/([^/]+)\/?(.*)$/.exec(url.pathname);
   if (!m) return send(res, 404, { statusCode: '404', error: 'not found', message: 'not found' });
   const bucket = m[1];

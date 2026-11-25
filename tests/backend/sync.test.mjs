@@ -210,8 +210,11 @@ test('receipt photo taken on one phone can be opened on the other', async () => 
   // deleting the entry deletes the photo in the cloud too
   T.store.deleteTransaction(t.id);
   await T.sync.syncNow();
-  await sleep(50);
-  await assert.rejects(M.sync.downloadPhoto(there.receiptId.slice(6)));
+  // check the file list (a direct download can still be answered from Supabase's cache for a while)
+  const [folder, file] = there.receiptId.slice(6).split('/');
+  const { data: files, error } = await M.client.storage.from('receipts').list(folder);
+  assert.ifError(error);
+  assert.ok(!files.some((f) => f.name === file), 'photo removed from storage');
 });
 
 test("Milica cannot read Tosve's personal receipt photos", async () => {
