@@ -22,7 +22,9 @@ final class StoreTests: XCTestCase {
 
     func testMoneyDisplay() {
         let sl = Locale(identifier: "sl_SI")
-        XCTAssertEqual(Money.format(123450, locale: sl).replacingOccurrences(of: "\u{00A0}", with: " "), "1.234,50 €")
+        // Slovenian groups thousands from 10.000 up (Apple writes 1234,50 €, older systems 1.234,50 €).
+        XCTAssertEqual(Money.format(1234550, locale: sl).replacingOccurrences(of: "\u{00A0}", with: " "), "12.345,50 €")
+        XCTAssertTrue(["1234,50 €", "1.234,50 €"].contains(Money.format(123450, locale: sl).replacingOccurrences(of: "\u{00A0}", with: " ")))
         XCTAssertEqual(Money.format(500, locale: sl).replacingOccurrences(of: "\u{00A0}", with: " "), "5 €")
         XCTAssertEqual(Money.inputText(1250), "12,50")
         XCTAssertEqual(Money.inputText(1205), "12,05")

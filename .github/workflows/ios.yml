@@ -4,6 +4,7 @@ name: iPhone app
 
 on:
   push:
+    branches: [main]
     paths: ["ios/**", "store.js", "receipt.js", "sync.js", "supabase/**", ".github/workflows/ios.yml"]
   pull_request:
     paths: ["ios/**", "store.js", "receipt.js", "sync.js", "supabase/**", ".github/workflows/ios.yml"]
@@ -53,6 +54,7 @@ jobs:
         working-directory: ios
         run: swift test
       - name: Build and run the UI tests
+        if: success() || failure()
         working-directory: ios/App
         run: |
           set -o pipefail
