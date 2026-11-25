@@ -142,15 +142,13 @@ class TextLines {
     final ps = pieces.where((p) => p.text.trim().isNotEmpty && p.maxY > p.minY).toList();
     if (ps.isEmpty) return '';
     var rows = _rows(ps, estimateSlope(ps));
-    if (ps.every((p) => p.slope.abs() < 1e-9)) {
-      // The reader gave no slope (some only give straight boxes). A photo taken at an angle
-      // then splits each item from its price, so try small slopes and keep the one that joins
-      // the most pieces into rows. A straight photo keeps slope 0.
-      for (var i = 1; i <= 40; i++) {
-        for (final s in [i * 0.005, -i * 0.005]) {
-          final r = _rows(ps, s);
-          if (r.length < rows.length) rows = r;
-        }
+    // Some readers give only straight boxes, or a slope that is off. On a photo taken at an angle
+    // each item then ends up on another line than its price, so small slopes are tried too, and
+    // the one that joins the most pieces into rows wins. A straight photo keeps its rows.
+    for (var i = 0; i <= 50; i++) {
+      for (final s in [i * 0.005, -i * 0.005]) {
+        final r = _rows(ps, s);
+        if (r.length < rows.length) rows = r;
       }
     }
     return rows

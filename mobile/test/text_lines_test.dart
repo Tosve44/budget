@@ -21,13 +21,22 @@ List<TextPiece> row(String name, String price, double y, double angle) {
 void main() {
   const lines = [('Banane kg', '1,62 C'), ('Kruh ajdov 400g', '2,35 C'), ('Sir Gauda 250g', '3,19 C'), ('Mineralna 1,5L', '0,99 C')];
 
-  for (final deg in [0.0, -3.0, -6.0, 4.0, 7.0]) {
+  for (final deg in [0.0, -3.0, -6.0, -9.0, 4.0, 7.0]) {
     test('a photo turned by $deg° still puts each price next to its item', () {
       final pieces = [for (var i = 0; i < lines.length; i++) ...row(lines[i].$1, lines[i].$2, 0.3 + i * 0.06, deg * pi / 180)];
       final text = TextLines.assemble(pieces..shuffle(Random(1)));
       expect(text.split('\n'), [for (final (n, p) in lines) '$n $p']);
     });
   }
+
+  test('a slope that the reader got wrong does not split items from their prices', () {
+    final pieces = [
+      for (var i = 0; i < lines.length; i++)
+        for (final p in row(lines[i].$1, lines[i].$2, 0.3 + i * 0.06, -8 * pi / 180))
+          TextPiece(p.text, p.minX, p.minY, p.maxX, p.maxY, 0.05),
+    ];
+    expect(TextLines.assemble(pieces).split('\n'), [for (final (n, p) in lines) '$n $p']);
+  });
 
   test('a given slope is used as it is', () {
     final pieces = [const TextPiece('Mleko', 0.1, 0.30, 0.4, 0.36, 0.1), const TextPiece('1,29', 0.8, 0.37, 0.9, 0.41, 0.1)];

@@ -8,6 +8,7 @@ import 'dart:ui';
 
 import 'package:budget/core/receipt_parser.dart';
 import 'package:budget/platform/receipt_reader.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
@@ -45,6 +46,12 @@ void main() {
           final total = ReceiptParser.findTotal(text);
           // ignore: avoid_print
           print('OCR ${photo.key}: ${items.length} items, total $total | ${items.take(4).map((i) => '${i.name} ${i.price}').join('; ')}');
+          if (items.isEmpty) {
+            // What the phone's reader gave, so a failure can be replayed in a unit test.
+            final raw = await const MethodChannel('budget/ocr').invokeListMethod<Map>('read', {'path': file.path, 'rotation': 0});
+            // ignore: avoid_print
+            print('PIECES ${photo.key}: ${jsonEncode(raw)}');
+          }
           expect(text, isNotEmpty, reason: 'no text found at all');
           expect(items.isNotEmpty || total != null, isTrue, reason: 'found neither items nor a total in:\n$text');
           if (photo.key == 'mercator.jpg') {
