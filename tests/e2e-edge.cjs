@@ -386,6 +386,30 @@ let KEY;
     assert(usesSystem && big > base, `text does not follow the iPhone text size (tab label ${base}px → ${big}px)`);
   });
 
+  for (const [system, pick, want] of [['dark', 'light', 'light'], ['light', 'dark', 'dark'], ['dark', 'system', 'dark']]) {
+    await check(`appearance: phone set to ${system}, app set to ${pick === 'system' ? 'Automatic' : pick} → ${want} look, kept after reopening`, async () => {
+      const { p: q, ctx: c2 } = await phone('iPhone SE', { colorScheme: system });
+      await tab(q, 'settings');
+      await q.click(`[data-theme-choice=${pick}]`);
+      const bg = () => q.evaluate(() => getComputedStyle(document.body).backgroundColor);
+      const isLight = (c) => { const [r, g, b] = c.match(/\d+/g).map(Number); return r + g + b > 600; };
+      assert(isLight(await bg()) === (want === 'light'), `background ${await bg()}`);
+      await q.reload();
+      await q.waitForSelector('.tabbar');
+      assert(isLight(await bg()) === (want === 'light'), `after reopening: ${await bg()}`);
+      await tab(q, 'settings');
+      assert(await q.$eval(`[data-theme-choice=${pick}]`, (b) => b.classList.contains('on')), 'choice not shown as selected');
+      if (axeSource && pick !== 'system') {
+        await tab(q, 'personal');
+        await add(q, { amount: '5', note: 'theme' });
+        await q.addScriptTag({ content: axeSource });
+        const bad = await q.evaluate(async () => (await window.axe.run(document, { runOnly: ['color-contrast'] })).violations.map((v) => v.nodes.length));
+        assert(!bad.length, `contrast problems: ${bad}`);
+      }
+      await c2.close();
+    });
+  }
+
   if (axeSource) {
     for (const scheme of ['light', 'dark']) {
       await check(`screen reader and contrast scan (axe), ${scheme} mode: no serious problems`, async () => {

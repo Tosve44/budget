@@ -55,6 +55,26 @@ function toast(msg) {
   setTimeout(() => el.remove(), 1800);
 }
 
+// ---------- light / dark look (per phone, not synced) ----------
+function theme() {
+  try { const t = localStorage.getItem('budget.theme'); return t === 'light' || t === 'dark' ? t : 'system'; } catch { return 'system'; }
+}
+function setTheme(t) {
+  try { if (t === 'system') localStorage.removeItem('budget.theme'); else localStorage.setItem('budget.theme', t); } catch {}
+  if (t === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  applyThemeColor();
+}
+// The colour of the iPhone status bar area follows the chosen look.
+function applyThemeColor() {
+  const t = theme();
+  document.querySelectorAll('meta[name=theme-color]').forEach((m) => {
+    if (!m.dataset.media) m.dataset.media = m.getAttribute('media') || '';
+    if (t === 'system') m.setAttribute('media', m.dataset.media);
+    else m.setAttribute('media', m.dataset.media.includes(t) ? 'all' : 'not all');
+  });
+}
+applyThemeColor();
+
 // ---------- current space ----------
 function currentSpace() {
   return state.tab === 'house' ? store.houseSpace() : store.personalSpace();
@@ -289,6 +309,10 @@ function renderSettings() {
 
   view.innerHTML = `
     ${syncCardHtml()}
+    <section class="card"><h2>Appearance</h2>
+      <div class="seg theme-seg" role="radiogroup" aria-label="Appearance">${[['system', 'Automatic'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<button type="button" role="radio" aria-checked="${theme() === v}" data-theme-choice="${v}" class="${theme() === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <p class="note">Automatic follows the phone's light or dark setting. This choice is kept on this phone only.</p>
+    </section>
     <section class="card"><h2>Currency</h2>
       <label class="field"><select id="currency" aria-label="Currency">${CURRENCIES.map((c) => `<option ${c === store.data.settings.currency ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
     </section>
@@ -309,6 +333,7 @@ function renderSettings() {
     toast(`Switched to ${store.currentUser.name}`);
   }));
   bindSyncCard();
+  view.querySelectorAll('[data-theme-choice]').forEach((b) => b.addEventListener('click', () => { setTheme(b.dataset.themeChoice); render(); }));
   $('#currency').addEventListener('change', (e) => {
     store.setSetting('currency', e.target.value);
     if (sync?.connected) sync.setCurrency(e.target.value).catch((err) => toast(err.message));
