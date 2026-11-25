@@ -86,11 +86,12 @@ function renderSpace(space) {
     ? `<div class="summary-main">
         <div><div class="sub">${left >= 0 ? 'Left this month' : 'Over budget'}</div>
         <div class="big ${left < 0 ? 'over' : ''}">${money(Math.abs(left))}</div></div>
-        <div class="sub">${Math.round((sum.spent / sum.budget) * 100)}% used</div>
+        <div class="sub">${Math.round((sum.spent / sum.budget) * 100)}% of ${money(sum.budget)}</div>
       </div>
       <div class="bar ${barClass}"><i style="width:${pct}%"></i></div>`
     : `<div class="sub">Spent this month</div><div class="big">${money(sum.spent)}</div>
        <p class="note">No monthly budget set yet. Add one per category in Settings.</p>`;
+  const balance = sum.income - sum.spent;
 
   const catRow = (c) => {
     const spent = sum.byCategory.get(c.id) || 0;
@@ -126,9 +127,9 @@ function renderSpace(space) {
   view.innerHTML = `
     <section class="card">${summary}
       <div class="stats">
-        <div class="stat"><div class="label">Income</div><div class="val income">${money(sum.income)}</div></div>
-        <div class="stat"><div class="label">Spent</div><div class="val">${money(sum.spent)}</div></div>
-        <div class="stat"><div class="label">Budget</div><div class="val">${sum.budget ? money(sum.budget) : '–'}</div></div>
+        <button class="stat" data-add="income" aria-label="Income ${money(sum.income)}. Add income"><div class="label">Income ＋</div><div class="val income">${money(sum.income)}</div></button>
+        <button class="stat" data-add="expense" aria-label="Spent ${money(sum.spent)}. Add expense"><div class="label">Spent ＋</div><div class="val">${money(sum.spent)}</div></button>
+        <div class="stat" id="balance"><div class="label">Balance</div><div class="val ${balance < 0 ? 'over' : balance > 0 ? 'income' : ''}">${money(balance, { sign: true })}</div></div>
       </div>
     </section>
     <section class="card"><h2>Spending by category</h2>
@@ -140,6 +141,7 @@ function renderSpace(space) {
       ${txRows ? `<ul class="tx-list">${txRows}</ul>` : '<p class="empty-note">No entries yet. Tap + to add one.</p>'}
     </section>`;
 
+  view.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => openTxSheet(null, { kind: b.dataset.add })));
   view.querySelectorAll('[data-cat]').forEach((b) => b.addEventListener('click', () => {
     state.filterCat = state.filterCat === b.dataset.cat ? null : b.dataset.cat;
     render();
@@ -331,9 +333,9 @@ function openSheet(html, bind) {
 }
 sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.close(); });
 
-function openTxSheet(tx) {
+function openTxSheet(tx, preset = {}) {
   const space = tx ? store.space(tx.spaceId) : currentSpace();
-  let kind = tx ? tx.kind : 'expense';
+  let kind = tx ? tx.kind : (preset.kind || 'expense');
   let categoryId = tx ? tx.categoryId : null;
   let items = tx?.items ? tx.items.map((it) => ({ ...it })) : [];
   let receiptId = tx?.receiptId || null;
@@ -572,6 +574,8 @@ function openCategorySheet({ cat, spaceId, kind }) {
     const save = () => {
       const name = $('#catName', root).value.trim();
       if (!name) { toast('Enter a name'); return; }
+      const sid = cat ? cat.spaceId : spaceId;
+      if (store.categories(sid).some((c) => c.kind === k && c.id !== cat?.id && c.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) { toast('A category with this name already exists'); return; }
       const budgetRaw = $('#catBudget', root)?.value ?? '';
       const budget = budgetRaw.trim() ? toCents(budgetRaw) : 0;
       if (Number.isNaN(budget) || budget < 0) { toast('Budget must be a number'); return; }

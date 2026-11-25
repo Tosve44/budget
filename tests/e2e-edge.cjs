@@ -41,6 +41,7 @@ let KEY;
   const data = (p) => p.evaluate(() => JSON.parse(localStorage['budget.v1']));
   const openAdd = async (p, { amount, cat = 'Groceries', note, date }) => {
     await p.click('#addBtn');
+    await p.waitForFunction(() => document.activeElement?.id === 'amount'); // the app focuses it right after opening
     if (amount !== undefined) await p.fill('#amount', amount);
     if (cat) await p.locator('[data-chip]', { hasText: cat }).first().click();
     if (date) await p.fill('#date', date);
