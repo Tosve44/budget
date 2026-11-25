@@ -21,6 +21,7 @@ const int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
 
 // Ids made by the web app are random; make them repeatable too.
 let n = 0;
+if (!globalThis.crypto) globalThis.crypto = (await import('node:crypto')).webcrypto;
 globalThis.crypto.randomUUID = () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`;
 
 const store = await import(pathToFileURL(`${webDir}/store.js`));

@@ -17,10 +17,13 @@ jobs:
     container: swift:6.0-noble
     steps:
       - uses: actions/checkout@v4
-      - name: Install Node.js and PostgreSQL
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install PostgreSQL
         run: |
           apt-get update -qq
-          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-16 curl ca-certificates nodejs npm >/dev/null
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-16 curl ca-certificates >/dev/null
       - name: Golden files still match the web app
         run: |
           node ios/scripts/make-golden.mjs .
