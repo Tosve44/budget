@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Budget</title>
+  <meta name="description" content="Personal and house budget for two.">
+  <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#151517" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Budget">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-row">
+      <h1 id="title">Personal</h1>
+      <span class="who" id="who"></span>
+    </div>
+    <div class="month" id="monthBar">
+      <button class="icon-btn" id="prevMonth" aria-label="Previous month">‹</button>
+      <span id="monthLabel"></span>
+      <button class="icon-btn" id="nextMonth" aria-label="Next month">›</button>
+    </div>
+  </header>
+
+  <main id="view"></main>
+
+  <button class="fab" id="addBtn" aria-label="Add expense or income">+</button>
+
+  <nav class="tabbar" aria-label="Spaces">
+    <button data-tab="personal" class="active"><span class="tab-ico">●</span>Personal</button>
+    <button data-tab="house"><span class="tab-ico">⌂</span>House</button>
+    <button data-tab="prices"><span class="tab-ico">↗</span>Prices</button>
+    <button data-tab="settings"><span class="tab-ico">⚙</span>Settings</button>
+  </nav>
+
+  <dialog id="sheet" class="sheet"></dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

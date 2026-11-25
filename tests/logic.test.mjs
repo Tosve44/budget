@@ -1,0 +1,221 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Store, toCents, shiftMonth, normalizeItem, createInitialData } from '../store.js';
+import { parseReceipt } from '../receipt.js';
+
+class MemStorage { constructor() { this.m = {}; } getItem(k) { return this.m[k] ?? null; } setItem(k, v) { this.m[k] = String(v); } }
+
+test('toCents handles common ways of typing money', () => {
+  const cases = { '12': 1200, '12,5': 1250, '12.50': 1250, '0,99': 99, '1.299,00': 129900, '1,299.00': 129900, ' 7 ': 700, '': NaN, 'abc': NaN };
+  for (const [inp, want] of Object.entries(cases)) {
+    const got = toCents(inp);
+    if (Number.isNaN(want)) assert.ok(Number.isNaN(got), inp); else assert.equal(got, want, inp);
+  }
+  assert.equal(toCents('0.1') + toCents('0.2'), 30); // no floating point drift
+});
+
+test('shiftMonth crosses years', () => {
+  assert.equal(shiftMonth('2026-12', 1), '2027-01');
+  assert.equal(shiftMonth('2026-01', -1), '2025-12');
+});
+
+test('initial data has all categories in the right spaces', () => {
+  const d = createInitialData();
+  const names = (spaceId, kind) => d.categories.filter((c) => c.spaceId === spaceId && c.kind === kind).map((c) => c.name);
+  for (const sp of ['sp_personal_tosve', 'sp_personal_milica']) {
+    for (const n of ['Car', 'Rent', 'Groceries', 'Food & Drinks', 'Lunch at work', 'Nicotine', 'Gym & Sports', 'Shopping', 'Gas', 'Traveling', 'Saving', 'Partner balance', 'Investing', 'Cash (ATM)', 'Barber', 'Beauty', 'Toiletries']) {
+      assert.ok(names(sp, 'expense').includes(n), `${sp} missing ${n}`);
+    }
+  }
+  assert.deepEqual(names('sp_house', 'expense'), ['Groceries', 'Savings', 'Shopping', 'Travel', 'Unexpected expenses']);
+  assert.ok(names('sp_personal_milica', 'income').includes('Partner balance'));
+  assert.ok(!names('sp_personal_tosve', 'income').includes('Partner balance'));
+  assert.equal(new Set(d.categories.map((c) => c.id)).size, d.categories.length, 'category ids unique');
+});
+
+function freshStore() { return new Store(new MemStorage()); }
+const catId = (s, spaceId, name, kind = 'expense') => s.categories(spaceId).find((c) => c.name === name && c.kind === kind).id;
+
+test('monthly summary: budget, spent, income, only that month and space', () => {
+  const s = freshStore();
+  const P = 'sp_personal_tosve';
+  s.updateCategory(catId(s, P, 'Groceries'), { budget: 30000 });
+  s.updateCategory(catId(s, P, 'Rent'), { budget: 50000 });
+  s.addTransaction({ spaceId: P, categoryId: catId(s, P, 'Groceries'), kind: 'expense', amount: 4550, date: '2026-11-03' });
+  s.addTransaction({ spaceId: P, categoryId: catId(s, P, 'Groceries'), kind: 'expense', amount: 1000, date: '2026-11-30' });
+  s.addTransaction({ spaceId: P, categoryId: catId(s, P, 'Groceries'), kind: 'expense', amount: 9999, date: '2026-10-31' });
+  s.addTransaction({ spaceId: P, categoryId: catId(s, P, 'Salary', 'income'), kind: 'income', amount: 200000, date: '2026-11-01' });
+  s.addTransaction({ spaceId: 'sp_house', categoryId: catId(s, 'sp_house', 'Groceries'), kind: 'expense', amount: 777, date: '2026-11-05' });
+  const sum = s.monthSummary(P, '2026-11');
+  assert.equal(sum.spent, 5550);
+  assert.equal(sum.income, 200000);
+  assert.equal(sum.budget, 80000);
+  assert.equal(sum.byCategory.get(catId(s, P, 'Groceries')), 5550);
+  assert.equal(s.monthSummary('sp_house', '2026-11').spent, 777);
+});
+
+test('hidden categories drop out of the budget total but keep their entries', () => {
+  const s = freshStore();
+  const P = 'sp_personal_tosve';
+  const car = catId(s, P, 'Car');
+  s.updateCategory(car, { budget: 10000 });
+  s.addTransaction({ spaceId: P, categoryId: car, kind: 'expense', amount: 500, date: '2026-11-02' });
+  s.updateCategory(car, { archived: true });
+  assert.equal(s.monthSummary(P, '2026-11').budget, 0);
+  assert.equal(s.transactions(P, '2026-11').length, 1);
+});
+
+test('personal spaces are separate per person', () => {
+  const s = freshStore();
+  assert.equal(s.personalSpace().id, 'sp_personal_tosve');
+  s.setSetting('currentUserId', 'u_milica');
+  assert.equal(s.personalSpace().id, 'sp_personal_milica');
+  const t = s.addTransaction({ spaceId: 'sp_house', categoryId: catId(s, 'sp_house', 'Travel'), kind: 'expense', amount: 100, date: '2026-11-01' });
+  assert.equal(t.createdBy, 'u_milica');
+});
+
+test('edit, delete, reorder, add category', () => {
+  const s = freshStore();
+  const P = 'sp_personal_tosve';
+  const t = s.addTransaction({ spaceId: P, categoryId: catId(s, P, 'Gas'), kind: 'expense', amount: 100, date: '2026-11-01' });
+  s.updateTransaction(t.id, { amount: 250 });
+  assert.equal(s.transactions(P)[0].amount, 250);
+  s.deleteTransaction(t.id);
+  assert.equal(s.transactions(P).length, 0);
+  const first = s.categories(P).filter((c) => c.kind === 'expense');
+  s.moveCategory(first[1].id, -1);
+  const after = s.categories(P).filter((c) => c.kind === 'expense');
+  assert.equal(after[0].id, first[1].id);
+  s.moveCategory(after[0].id, -1); // already first: no change, no crash
+  const pets = s.addCategory({ spaceId: P, name: 'Pets', kind: 'expense', budget: 2000 });
+  assert.equal(s.categories(P).filter((c) => c.kind === 'expense').at(-1).id, pets.id);
+});
+
+test('data survives a reload and backup/restore round-trips', () => {
+  const mem = new MemStorage();
+  const s = new Store(mem);
+  const P = 'sp_personal_tosve';
+  s.addTransaction({ spaceId: P, categoryId: catId(s, P, 'Barber'), kind: 'expense', amount: 1500, date: '2026-11-01', items: [{ name: 'Cut', price: 1500 }] });
+  const s2 = new Store(mem);
+  assert.equal(s2.transactions(P).length, 1);
+  assert.equal(s2.transactions(P)[0].items[0].name, 'Cut');
+  const backup = s2.exportJSON();
+  const s3 = freshStore();
+  s3.importJSON(backup);
+  assert.deepEqual(s3.data, s2.data);
+  assert.throws(() => s3.importJSON('{"hello":1}'));
+  assert.throws(() => s3.importJSON('not json'));
+  assert.equal(s3.transactions(P).length, 1, 'failed import keeps old data');
+});
+
+test('corrupt saved data falls back to a fresh start instead of crashing', () => {
+  const mem = new MemStorage();
+  mem.setItem('budget.v1', '{broken');
+  const s = new Store(mem);
+  assert.equal(s.data.transactions.length, 0);
+});
+
+test('price comparison finds the latest earlier purchase and ignores later ones', () => {
+  const s = freshStore();
+  const P = 'sp_personal_tosve', G = catId(s, P, 'Groceries');
+  s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: 1, date: '2026-09-01', items: [{ name: 'MLEKO 3,5% 1L', price: 109 }] });
+  s.addTransaction({ spaceId: 'sp_house', categoryId: catId(s, 'sp_house', 'Groceries'), kind: 'expense', amount: 1, date: '2026-10-01', items: [{ name: 'Mleko 3,5%  1L', price: 119 }] });
+  s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: 1, date: '2026-12-01', items: [{ name: 'mleko 3,5% 1l', price: 139 }] });
+  const prev = s.previousPrice('Mleko 3,5% 1L', '2026-11-15');
+  assert.deepEqual(prev, { date: '2026-10-01', price: 119 });
+  assert.equal(s.previousPrice('Kruh', '2026-11-15'), null);
+  const hist = s.itemHistory().get(normalizeItem('MLEKO 3,5% 1L'));
+  assert.deepEqual(hist.entries.map((e) => e.price), [109, 119, 139]);
+});
+
+test('normalizeItem merges case, accents and punctuation differences', () => {
+  assert.equal(normalizeItem('Čokolada  MILKA, 100g'), normalizeItem('cokolada milka 100g'));
+  assert.notEqual(normalizeItem('Mleko 1L'), normalizeItem('Mleko 0,5L'));
+});
+
+// ---- receipt text parsing (what the reader gets back from a photo) ----
+const MERCATOR = `MERCATOR d.o.o.
+Dunajska cesta 107, Ljubljana
+ID za DDV: SI45884595
+Račun št.: 12-34-5678
+MLEKO ALPSKO 3,5% 1L        1,29 C
+KRUH BELI 500G              1,49 C
+2 x 0,89
+JOGURT NAVADNI 180G         1,78 C
+BANANE
+0,856 kg x 1,49 EUR/kg      1,28 C
+ČOKOLADA MILKA 100G         1,59 A
+Popust                     -0,30
+SKUPAJ EUR                  7,13
+Gotovina                   10,00
+Vračilo                     2,87
+DDV 9,5%  osnova 5,27       0,50
+ZOI: 3a5f9c2e
+EOR: 7d1b-22aa`;
+
+test('parses a Mercator-style receipt', () => {
+  assert.deepEqual(parseReceipt(MERCATOR), [
+    { name: 'MLEKO ALPSKO 3,5% 1L', price: 129 },
+    { name: 'KRUH BELI 500G', price: 149 },
+    { name: 'JOGURT NAVADNI 180G', price: 178 },
+    { name: 'BANANE', price: 128 },
+    { name: 'ČOKOLADA MILKA 100G', price: 159 },
+  ]);
+});
+
+const LIDL = `Lidl Slovenija d.o.o. k.d.
+EUR
+Jajca M 10/1           2,49 B
+Maslo 250g             2,99 B
+Testenine špageti      0,89 B
+Paradižnik             1,15 B
+  0,620 kg x 1,85 EUR/kg
+Skupaj                 7,52
+Kartica                7,52`;
+
+test('parses a Lidl-style receipt with the weight line below the item', () => {
+  assert.deepEqual(parseReceipt(LIDL), [
+    { name: 'Jajca M 10/1', price: 249 },
+    { name: 'Maslo 250g', price: 299 },
+    { name: 'Testenine špageti', price: 89 },
+    { name: 'Paradižnik', price: 115 },
+  ]);
+});
+
+const SPAR = `SPAR Slovenija
+Kava Barcaffe 400g   € 5,49
+Sir Edamec 300g      € 3,99
+Pivo Laško 0,5L 4x   € 4,36
+ZA PLAČILO           €13,84`;
+
+test('parses prices written with a euro sign in front', () => {
+  assert.deepEqual(parseReceipt(SPAR).map((i) => [i.name, i.price]), [
+    ['Kava Barcaffe 400g', 549], ['Sir Edamec 300g', 399], ['Pivo Laško 0,5L 4x', 436],
+  ]);
+});
+
+test('OCR noise: colons, stray marks, spaces in prices; dates and times are not items', () => {
+  const t = `25.11.2026 10:15
+MLEKO 1L 1:29 C
+JABOLKA 2:15:C
+Kava 400g € 5, 49
+Sir 300g e 3,99
+KRUH 5006 1,49 C`;
+  assert.deepEqual(parseReceipt(t), [
+    { name: 'MLEKO 1L', price: 129 }, { name: 'JABOLKA', price: 215 }, { name: 'Kava 400g', price: 549 },
+    { name: 'Sir 300g', price: 399 }, { name: 'KRUH 500G', price: 149 },
+  ]);
+});
+
+import { findTotal } from '../receipt.js';
+test('finds the printed total (with discount) and ignores tax lines', () => {
+  assert.equal(findTotal(MERCATOR), 713);
+  assert.equal(findTotal(SPAR), 1384);
+  assert.equal(findTotal('DDV skupaj 0,50\nnothing'), null);
+});
+
+test('lowercase tax letters and "g" misread as 9', () => {
+  assert.deepEqual(parseReceipt('Jogurt Ego 150g 0,69 c\nCips Chio 1509 1,99 A'), [
+    { name: 'Jogurt Ego 150g', price: 69 }, { name: 'Cips Chio 150g', price: 199 },
+  ]);
+});
