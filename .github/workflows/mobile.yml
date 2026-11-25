@@ -1,0 +1,205 @@
+# The phone app (Flutter, iPhone + Android) in mobile/. Runs on GitHub's free machines
+# (free and unlimited for public repositories): logic and sync tests, then the app on many
+# Android emulators and iPhone simulators, then installable builds (APK and unsigned IPA).
+name: Phone app
+
+on:
+  push:
+    branches: [main]
+    paths: ["mobile/**", "store.js", "receipt.js", "sync.js", "supabase/**", "tests/**", ".github/workflows/mobile.yml"]
+  pull_request:
+    paths: ["mobile/**", "store.js", "receipt.js", "sync.js", "supabase/**", "tests/**", ".github/workflows/mobile.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.47.9"
+
+defaults:
+  run:
+    working-directory: mobile
+
+jobs:
+  logic:
+    name: Logic, screens and sync (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Golden files still match the web app
+        run: |
+          node tool/make-golden.mjs ..
+          git diff --exit-code --stat -- test/fixtures ':!test/fixtures/webdata.json' || echo "::warning::The web app's logic changed; golden files were regenerated for this run."
+      - run: flutter analyze
+      - name: Logic and golden tests
+        run: flutter test test/golden_test.dart
+      - name: Screens on 8 phone sizes x 2 text sizes
+        run: flutter test test/screens_test.dart
+      - name: Install PostgreSQL
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-16 >/dev/null
+          sudo systemctl stop postgresql || true
+      - name: Start the test database and fake Supabase
+        run: sudo -E env "PATH=$PATH" bash tool/start-test-backend.sh .. && sudo chmod -R a+rwX /tmp/budget-test-backend
+      - name: Sync tests (two phones, the web app, flaky network)
+        env:
+          SUPABASE_TEST_URL: http://localhost:54321
+          WEB_APP_DIR: ${{ github.workspace }}
+          NODE_MODULES_DIR: /tmp/budget-test-backend/node_modules
+        run: flutter test test/sync_test.dart
+
+  android:
+    name: Android ${{ matrix.android }} · ${{ matrix.name }}
+    needs: logic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "Small old phone (Nexus S, 4\")", profile: "Nexus S", api: 26, android: "8.0", font: "1.0", dark: "no" }
+          - { name: "Pixel 2", profile: pixel_2, api: 28, android: "9", font: "1.0", dark: "no" }
+          - { name: "Pixel 3a, large text", profile: pixel_3a, api: 29, android: "10", font: "1.3", dark: "no" }
+          - { name: "Pixel 4, dark mode", profile: pixel_4, api: 30, android: "11", font: "1.0", dark: "yes" }
+          - { name: "Pixel 5", profile: pixel_5, api: 31, android: "12", font: "1.0", dark: "no" }
+          - { name: "Pixel 6", profile: pixel_6, api: 33, android: "13", font: "1.0", dark: "no" }
+          - { name: "Pixel 7 Pro, largest text", profile: pixel_7_pro, api: 34, android: "14", font: "2.0", dark: "no" }
+          - { name: "Pixel 8", profile: pixel_8, api: 35, android: "15", font: "1.0", dark: "no" }
+          - { name: "Pixel 9 Pro XL", profile: pixel_9_pro_xl, api: 36, android: "16", font: "1.0", dark: "yes" }
+          - { name: "Pixel Fold (foldable, open)", profile: pixel_fold, api: 34, android: "14", font: "1.0", dark: "no" }
+          - { name: "Flip phone (6.7\" foldable)", profile: "6.7in Foldable", api: 34, android: "14", font: "1.0", dark: "no" }
+          - { name: "Pixel Tablet", profile: pixel_tablet, api: 34, android: "14", font: "1.0", dark: "no" }
+          - { name: "Small phone, large text (Pixel 4a)", profile: pixel_4a, api: 33, android: "13", font: "1.5", dark: "no" }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Allow the emulator to use the processor's virtualisation (KVM)
+        working-directory: .
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build the test app first (so the emulator is not kept waiting)
+        run: flutter build apk --debug -t integration_test/app_test.dart
+      - name: Run on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: ${{ matrix.profile }}
+          ram-size: 4096M
+          disk-size: 6000M
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          disable-animations: true
+          working-directory: mobile
+          script: bash tool/ci-android-test.sh "${{ matrix.font }}" "${{ matrix.dark }}" device-test.log
+      - name: Summary
+        if: always()
+        run: |
+          { echo "### Android ${{ matrix.android }} · ${{ matrix.name }}"; head -1 device-test.log 2>/dev/null;
+            grep -E "^(DEVICE|OCR) " device-test.log 2>/dev/null | sed 's/^/    /';
+            grep -E "All tests passed|Some tests failed|\[E\]" device-test.log 2>/dev/null | tail -15; } >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-${{ matrix.api }}-${{ strategy.job-index }}
+          path: mobile/device-test.log
+
+  iphone:
+    name: iOS ${{ matrix.ios }} · ${{ matrix.name }}
+    needs: logic
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "iPhone SE (3rd gen, small)", device: iPhone-SE-3rd-generation, ios: "18", runtime: "iOS-18", runner: macos-15 }
+          - { name: "iPhone 16 Pro Max (large)", device: iPhone-16-Pro-Max, ios: "18", runtime: "iOS-18", runner: macos-15 }
+          - { name: "iPhone 15", device: iPhone-15, ios: "17", runtime: "iOS-17-5", runner: macos-15 }
+          - { name: "iPhone 17 Pro", device: iPhone-17-Pro, ios: "26", runtime: "iOS-26", runner: macos-26 }
+          - { name: "iPhone 16e", device: iPhone-16e, ios: "26", runtime: "iOS-26", runner: macos-26 }
+          - { name: "iPad (A16)", device: iPad-A16, ios: "26", runtime: "iOS-26", runner: macos-26 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Make the simulator
+        run: |
+          SIM="$(bash tool/ci-simulator.sh ${{ matrix.device }} ${{ matrix.runtime }})"
+          echo "SIM=$SIM" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIM"
+          xcrun simctl bootstatus "$SIM" -b
+      - name: Run on the simulator
+        run: |
+          set -o pipefail
+          { echo "Simulator: ${{ matrix.device }} | $(xcrun simctl list devices | grep "$SIM" | head -1 | xargs) | Xcode $(xcodebuild -version | head -1)"; } | tee device-test.log
+          flutter test integration_test/app_test.dart -d "$SIM" --reporter expanded 2>&1 | tee -a device-test.log
+      - name: Summary
+        if: always()
+        run: |
+          { echo "### iOS ${{ matrix.ios }} · ${{ matrix.name }}"; head -1 device-test.log 2>/dev/null;
+            grep -E "^(DEVICE|OCR) " device-test.log 2>/dev/null | sed 's/^/    /';
+            grep -E "All tests passed|Some tests failed|\[E\]" device-test.log 2>/dev/null | tail -15; } >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-${{ matrix.ios }}-${{ strategy.job-index }}
+          path: mobile/device-test.log
+
+  builds:
+    name: Installable apps (APK + unsigned IPA)
+    needs: logic
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Android app (APK)
+        run: flutter build apk --release
+      - name: iPhone app (unsigned IPA, for Sideloadly / AltStore with a free Apple ID)
+        run: |
+          flutter build ios --release --no-codesign
+          mkdir -p build/ipa/Payload && cp -R build/ios/iphoneos/Runner.app build/ipa/Payload/
+          (cd build/ipa && zip -qr Budget-unsigned.ipa Payload)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Budget-apps
+          path: |
+            mobile/build/app/outputs/flutter-apk/app-release.apk
+            mobile/build/ipa/Budget-unsigned.ipa
