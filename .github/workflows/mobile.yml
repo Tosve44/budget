@@ -44,7 +44,7 @@ jobs:
           git diff --exit-code --stat -- test/fixtures ':!test/fixtures/webdata.json' || echo "::warning::The web app's logic changed; golden files were regenerated for this run."
       - run: flutter analyze
       - name: Logic and golden tests
-        run: flutter test test/golden_test.dart
+        run: flutter test test/golden_test.dart test/text_lines_test.dart
       - name: Screens on 8 phone sizes x 2 text sizes
         run: flutter test test/screens_test.dart
       - name: Install PostgreSQL

@@ -141,9 +141,29 @@ class TextLines {
   static String assemble(List<TextPiece> pieces) {
     final ps = pieces.where((p) => p.text.trim().isNotEmpty && p.maxY > p.minY).toList();
     if (ps.isEmpty) return '';
-    final slope = estimateSlope(ps);
+    var rows = _rows(ps, estimateSlope(ps));
+    if (ps.every((p) => p.slope.abs() < 1e-9)) {
+      // The reader gave no slope (some only give straight boxes). A photo taken at an angle
+      // then splits each item from its price, so try small slopes and keep the one that joins
+      // the most pieces into rows. A straight photo keeps slope 0.
+      for (var i = 1; i <= 40; i++) {
+        for (final s in [i * 0.005, -i * 0.005]) {
+          final r = _rows(ps, s);
+          if (r.length < rows.length) rows = r;
+        }
+      }
+    }
+    return rows
+        .map((row) {
+          row.sort((a, b) => a.minX.compareTo(b.minX));
+          return row.map((p) => p.text.trim()).join(' ');
+        })
+        .join('\n');
+  }
+
+  static List<List<TextPiece>> _rows(List<TextPiece> pieces, double slope) {
     double y(TextPiece p) => p.midY - slope * ((p.minX + p.maxX) / 2);
-    ps.sort((a, b) => y(a).compareTo(y(b)));
+    final ps = [...pieces]..sort((a, b) => y(a).compareTo(y(b)));
     final rows = <List<TextPiece>>[];
     final rowY = <double>[];
     final rowH = <double>[];
@@ -160,12 +180,7 @@ class TextLines {
         rowH.add(p.height);
       }
     }
-    return rows
-        .map((row) {
-          row.sort((a, b) => a.minX.compareTo(b.minX));
-          return row.map((p) => p.text.trim()).join(' ');
-        })
-        .join('\n');
+    return rows;
   }
 
   /// The typical slope of the rows: the median slope of the (wide) pieces. 0 if unsure.

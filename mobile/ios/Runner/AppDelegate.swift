@@ -68,11 +68,16 @@ class ReceiptOcr: NSObject, FlutterPlugin {
     request.recognitionLanguages = ["sl-SI", "hr-HR", "de-DE", "en-US"].filter { supported.contains($0) }
     try VNImageRequestHandler(cgImage: cg, orientation: orientation).perform([request])
     return (request.results ?? []).compactMap { obs in
-      guard let text = obs.topCandidates(1).first?.string else { return nil }
+      guard let candidate = obs.topCandidates(1).first else { return nil }
+      let text = candidate.string
       // Vision measures from the bottom-left; the Dart side wants the top-left.
       let b = obs.boundingBox
-      let dx = obs.bottomRight.x - obs.bottomLeft.x
-      let dy = obs.bottomRight.y - obs.bottomLeft.y
+      // The observation's own corners are a straight box; the candidate's box for its whole text
+      // follows the tilt of a photo taken at an angle. If Vision cannot give it, the slope is 0
+      // and the Dart side works it out from the rows.
+      let quad = (try? candidate.boundingBox(for: text.startIndex..<text.endIndex)) ?? nil
+      let dx = (quad?.bottomRight.x ?? 0) - (quad?.bottomLeft.x ?? 0)
+      let dy = (quad?.bottomRight.y ?? 0) - (quad?.bottomLeft.y ?? 0)
       let slope = dx > 0 ? -Double(dy / dx) : 0
       return [
         "text": text,
