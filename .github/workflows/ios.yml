@@ -1,0 +1,66 @@
+# Builds and tests the iPhone app on every change. Runs on GitHub's free machines
+# (free and unlimited for public repositories).
+name: iPhone app
+
+on:
+  push:
+    paths: ["ios/**", "store.js", "receipt.js", "sync.js", "supabase/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**", "store.js", "receipt.js", "sync.js", "supabase/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+jobs:
+  logic-and-sync:
+    name: Logic + sync tests (Linux)
+    runs-on: ubuntu-24.04
+    container: swift:6.0-noble
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node.js and PostgreSQL
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-16 curl ca-certificates nodejs npm >/dev/null
+      - name: Golden files still match the web app
+        run: |
+          node ios/scripts/make-golden.mjs .
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git diff --exit-code --stat ios/Tests/BudgetKitTests/Fixtures || echo "::warning::The web app's logic changed; golden files were regenerated for this run."
+      - name: Start the test database and fake Supabase
+        run: ios/scripts/start-test-backend.sh .
+      - name: swift test
+        working-directory: ios
+        env:
+          SUPABASE_TEST_URL: http://localhost:54321
+          WEB_APP_DIR: ${{ github.workspace }}
+          NODE_MODULES_DIR: /tmp/budget-test-backend/node_modules
+          WEBPHONE_SCRIPT: ${{ github.workspace }}/ios/scripts/webphone.mjs
+        run: swift test
+
+  iphone:
+    name: iPhone app (${{ matrix.device }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        device: ["iPhone SE (3rd generation)", "iPhone 16 Pro Max"]
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - name: Generate the Xcode project
+        working-directory: ios/App
+        run: xcodegen
+      - name: Logic tests on macOS
+        working-directory: ios
+        run: swift test
+      - name: Build and run the UI tests
+        working-directory: ios/App
+        run: |
+          set -o pipefail
+          xcodebuild test -project Budget.xcodeproj -scheme Budget \
+            -destination "platform=iOS Simulator,name=${{ matrix.device }}" \
+            -resultBundlePath TestResults.xcresult CODE_SIGNING_ALLOWED=NO | tail -200
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.device }}
+          path: ios/App/TestResults.xcresult
