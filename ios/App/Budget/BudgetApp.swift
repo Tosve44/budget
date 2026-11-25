@@ -18,9 +18,19 @@ struct BudgetApp: App {
     }
 }
 
+/// Light, dark, or whatever the iPhone is set to (the default).
+enum Appearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+    var id: String { rawValue }
+    var title: String { switch self { case .system: "Same as iPhone"; case .light: "Light"; case .dark: "Dark" } }
+    var scheme: ColorScheme? { switch self { case .system: nil; case .light: .light; case .dark: .dark } }
+    static let storageKey = "appearance"
+}
+
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var tab = Tab.personal
+    @AppStorage(Appearance.storageKey) private var appearance = Appearance.system
 
     enum Tab: Hashable { case personal, house, prices, settings }
 
@@ -52,5 +62,6 @@ struct RootView: View {
                     .accessibilityIdentifier("saveProblem")
             }
         }
+        .preferredColorScheme(appearance.scheme)
     }
 }

@@ -104,6 +104,8 @@ final class AppModel {
     /// For UI tests: a fresh start in memory every launch, optionally with sample entries.
     static func forUITests() -> AppModel {
         let store = BudgetStore(storage: MemoryStorage())
+        // Each UI test starts with the default look, unless it is testing that the choice is remembered.
+        if !AppConfig.flag("-keep-appearance") { UserDefaults.standard.removeObject(forKey: "appearance") }
         if AppConfig.flag("-as-milica") { store.setCurrentUser("u_milica") }
         if AppConfig.flag("-demo-data") { DemoData.fill(store) }
         let photos = PhotoStore(folder: FileManager.default.temporaryDirectory.appendingPathComponent("ui-test-receipts-\(UUID().uuidString)"))

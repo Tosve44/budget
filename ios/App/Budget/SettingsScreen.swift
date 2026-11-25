@@ -9,6 +9,7 @@ struct SettingsScreen: View {
     @State private var pendingImport: Data?
     @State private var message: String?
     @State private var confirmReset = false
+    @AppStorage(Appearance.storageKey) private var appearance = Appearance.system
 
     var body: some View {
         NavigationStack {
@@ -37,6 +38,18 @@ struct SettingsScreen: View {
                     if let h = store.houseSpace {
                         NavigationLink("House") { CategoriesScreen(spaceId: h.id) }.accessibilityIdentifier("editHouseCategories")
                     }
+                }
+
+                Section {
+                    Picker("Look", selection: $appearance) {
+                        ForEach(Appearance.allCases) { a in Text(a.title).tag(a) }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("appearancePicker")
+                } header: {
+                    Text("Appearance")
+                } footer: {
+                    Text("Light or dark colours. \"Same as iPhone\" follows your iPhone's setting.")
                 }
 
                 PartnerBalanceSection()

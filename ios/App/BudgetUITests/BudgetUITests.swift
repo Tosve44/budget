@@ -342,6 +342,28 @@ final class BudgetUITests: XCTestCase {
         app.buttons["Cancel"].tap()
     }
 
+    func testLightAndDarkCanBeChosenInSettings() {
+        XCUIDevice.shared.appearance = .dark
+        defer { XCUIDevice.shared.appearance = .light }
+        launch(["-demo-data"])
+        tab("Settings")
+        let picker = app.segmentedControls["appearancePicker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        XCTAssertTrue(picker.buttons["Same as iPhone"].isSelected, "follows the iPhone by default")
+        picker.buttons["Light"].tap()
+        XCTAssertTrue(picker.buttons["Light"].isSelected)
+        tour("chosen light on a dark iPhone")
+        // The choice is remembered after closing the app.
+        app.terminate()
+        app.launchArguments.append("-keep-appearance")
+        app.launch()
+        tab("Settings")
+        XCTAssertTrue(app.segmentedControls["appearancePicker"].buttons["Light"].isSelected, "remembered")
+        app.segmentedControls["appearancePicker"].buttons["Dark"].tap()
+        tour("chosen dark")
+        app.segmentedControls["appearancePicker"].buttons["Same as iPhone"].tap()
+    }
+
     func testVeryLargeText() {
         launch(["-demo-data", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         tour("largest text")
