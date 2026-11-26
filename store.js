@@ -180,9 +180,9 @@ export class Store {
     this.save();
   }
 
-  addCategory({ spaceId, name, kind, budget = 0 }) {
+  addCategory({ spaceId, name, kind, budget = 0, icon = '' }) {
     const order = Math.max(-1, ...this.data.categories.map((c) => c.order)) + 1;
-    const c = { id: uid('cat'), spaceId, name: clip(name, LIMITS.categoryName), kind, budget, order, archived: false, updatedAt: new Date().toISOString() };
+    const c = { id: uid('cat'), spaceId, name: clip(name, LIMITS.categoryName), icon: clip(icon, 16), kind, budget, order, archived: false, updatedAt: new Date().toISOString() };
     this.data.categories.push(c);
     this._changed('categories', c.id);
     this.save();
@@ -193,6 +193,7 @@ export class Store {
     const c = this.category(id);
     if (!c) return;
     if ('name' in patch) patch = { ...patch, name: clip(patch.name, LIMITS.categoryName) };
+    if ('icon' in patch) patch = { ...patch, icon: clip(patch.icon, 16) };
     Object.assign(c, patch, { updatedAt: new Date().toISOString() });
     this._changed('categories', id);
     this.save();
@@ -256,6 +257,28 @@ export class Store {
 }
 
 // ---- helpers shared with the UI ----
+// An icon for each category, picked from its name (the same list is used by the phone apps).
+// Names not in the list, such as categories people add themselves, get a tag.
+const ICONS = {
+  'car': '🚗', 'rent': '🏠', 'groceries': '🛒', 'food & drinks': '🍽️', 'lunch at work': '🥪',
+  'nicotine': '🚬', 'gym & sports': '🏋️', 'shopping': '🛍️', 'gas': '⛽', 'traveling': '✈️',
+  'travel': '✈️', 'saving': '🐷', 'savings': '🐷', 'partner balance': '🤝', 'investing': '📈',
+  'cash (atm)': '🏧', 'barber': '💈', 'beauty': '💅', 'toiletries': '🧴', 'salary': '💼',
+  'other income': '💰', 'contributions': '💶', 'unexpected expenses': '⚠️',
+};
+export const DEFAULT_ICON = '🏷️';
+// Icons a person can pick for a category (the phone apps show the same grid in this order).
+export const ICON_CHOICES = ['🛒', '🍽️', '☕', '🥪', '🍕', '🍺', '🍷', '🚬', '🚗', '⛽', '🚌', '🚕', '✈️', '🏨', '🏠', '💡', '💧', '📱', '🌐', '🛍️',
+  '👕', '👟', '💄', '💅', '💈', '🧴', '💊', '🏥', '🏋️', '⚽', '🎬', '🎮', '📚', '🎁', '🐶', '👶', '🐷', '📈', '💵', '🏷️'];
+// A chosen icon wins; otherwise the default for the name. Accepts a category or just a name.
+export function categoryIcon(catOrName) {
+  if (catOrName && typeof catOrName === 'object') {
+    if (catOrName.icon) return catOrName.icon;
+    catOrName = catOrName.name;
+  }
+  return ICONS[String(catOrName || '').trim().toLowerCase()] || DEFAULT_ICON;
+}
+
 function clip(s, max) { return String(s || '').slice(0, max); }
 function cleanItems(items) {
   return items.slice(0, LIMITS.items).map((it) => ({ ...it, name: clip(it.name, LIMITS.itemName) }));

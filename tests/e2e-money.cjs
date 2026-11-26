@@ -129,7 +129,7 @@ const eur = (c) => (c / 100).toFixed(2).replace('.', ',');
     await p.click('[data-add=income]');
     assert(await p.$eval('.seg [data-kind=income]', (b) => b.classList.contains('on')), 'Income not selected');
     const chips = await p.$$eval('[data-chip]', (cs) => cs.map((c) => c.textContent));
-    assert(chips.includes('Salary') && !chips.includes('Groceries'), `chips: ${chips.join(', ')}`);
+    assert(chips.some((c) => c.endsWith('Salary')) && !chips.some((c) => c.endsWith('Groceries')), `chips: ${chips.join(', ')}`);
     const focused = await p.waitForFunction(() => document.activeElement?.id === 'amount', null, { timeout: 1500 }).then(() => true, () => false);
     if (!focused) { await p.click('[data-close]'); await closed(); }
     assert(focused, 'amount field focused, keyboard ready');
@@ -140,7 +140,7 @@ const eur = (c) => (c / 100).toFixed(2).replace('.', ',');
     await p.click('[data-add=expense]');
     assert(await p.$eval('.seg [data-kind=expense]', (b) => b.classList.contains('on')), 'Expense not selected');
     const chips = await p.$$eval('[data-chip]', (cs) => cs.map((c) => c.textContent));
-    assert(chips.includes('Groceries') && !chips.includes('Salary'));
+    assert(chips.some((c) => c.endsWith('Groceries')) && !chips.some((c) => c.endsWith('Salary')));
     await p.click('[data-close]'); await closed();
   });
 

@@ -1,4 +1,4 @@
-import { Store, LIMITS, toCents, monthKey, todayKey, shiftMonth, uid, normalizeItem } from './store.js';
+import { Store, LIMITS, categoryIcon, ICON_CHOICES, toCents, monthKey, todayKey, shiftMonth, uid, normalizeItem } from './store.js';
 import { putPhoto, getPhoto, deletePhoto, compressImage } from './photos.js';
 import { readReceiptText, parseReceipt, findTotal } from './receipt.js';
 import { startCloud, loadPhoto } from './cloud.js';
@@ -26,6 +26,8 @@ function changeBadge(p) {
 }
 
 // ---------- formatting ----------
+// The category's icon, hidden from screen readers (the name is read instead).
+const ico = (cat) => `<span class="cat-ico" aria-hidden="true">${esc(categoryIcon(cat))}</span>`;
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -121,7 +123,7 @@ function renderSpace(space) {
       ? `${money(spent)} <small>/ ${money(c.budget)}</small>`
       : money(spent);
     return `<li class="cat-row ${state.filterCat === c.id ? 'selected' : ''}"><button data-cat="${esc(c.id)}">
-      <div class="cat-top"><span class="cat-name">${esc(c.name)}</span><span class="cat-amt">${right}</span></div>
+      <div class="cat-top"><span class="cat-name">${ico(c)}${esc(c.name)}</span><span class="cat-amt">${right}</span></div>
       ${c.kind === 'expense' && c.budget ? `<div class="bar ${cls}"><i style="width:${p}%"></i></div>` : ''}
     </button></li>`;
   };
@@ -139,7 +141,7 @@ function renderSpace(space) {
     const c = store.category(t.categoryId);
     const meta = [dayLabel(t.date), t.items?.length ? `🧾 ${t.items.length} items` : (t.receiptId ? '🧾' : null), t.note, showWho ? store.user(t.createdBy)?.name : null].filter(Boolean).map(esc).join(' · ');
     return `<li class="tx"><button data-tx="${esc(t.id)}">
-      <div class="tx-main"><div class="tx-cat">${esc(c ? c.name : 'Deleted category')}</div><div class="tx-meta">${meta}</div></div>
+      <div class="tx-main"><div class="tx-cat">${c ? ico(c) : ''}${esc(c ? c.name : 'Deleted category')}</div><div class="tx-meta">${meta}</div></div>
       <div class="tx-amt ${t.kind === 'income' ? 'income' : ''}">${t.kind === 'income' ? '+' : '−'}${money(t.amount)}</div>
     </button></li>`;
   }).join('');
@@ -157,7 +159,7 @@ function renderSpace(space) {
     </section>
     ${activeIncome.length ? `<section class="card"><h2>Income</h2><ul class="cat-list">${activeIncome.map(catRow).join('')}</ul></section>` : ''}
     <section class="card"><h2>${filterCat ? 'Entries' : 'All entries'}</h2>
-      ${filterCat ? `<button class="filter-chip" id="clearFilter">${esc(filterCat.name)} ✕</button>` : ''}
+      ${filterCat ? `<button class="filter-chip" id="clearFilter">${ico(filterCat)}${esc(filterCat.name)} ✕</button>` : ''}
       ${txRows ? `<ul class="tx-list">${txRows}</ul>` : '<p class="empty-note">No entries yet. Tap + to add one.</p>'}
     </section>`;
 
@@ -295,7 +297,7 @@ function renderSettings() {
       const list = all.filter((c) => c.kind === kind);
       return `<h2 style="margin-top:14px">${label}</h2><ul class="set-list">${list.map((c, i) => `
         <li class="${c.archived ? 'archived' : ''}">
-          <span class="name">${esc(c.name)}<small>${c.archived ? 'Hidden' : kind === 'expense' ? (c.budget ? `Budget ${money(c.budget)} / month` : 'No budget') : 'Income'}</small></span>
+          <span class="name">${ico(c)}${esc(c.name)}<small>${c.archived ? 'Hidden' : kind === 'expense' ? (c.budget ? `Budget ${money(c.budget)} / month` : 'No budget') : 'Income'}</small></span>
           <span class="actions">
             <button class="mini" data-move="${esc(c.id)}" data-dir="-1" aria-label="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
             <button class="mini" data-move="${esc(c.id)}" data-dir="1" aria-label="Move down" ${i === list.length - 1 ? 'disabled' : ''}>↓</button>
@@ -369,7 +371,7 @@ function openTxSheet(tx, preset = {}) {
   const defaultDate = tx ? tx.date : (state.month === monthKey() ? todayKey() : `${state.month}-01`);
 
   const chipsHtml = () => store.categories(space.id).filter((c) => c.kind === kind)
-    .map((c) => `<button type="button" class="chip ${c.id === categoryId ? 'on' : ''}" data-chip="${esc(c.id)}">${esc(c.name)}</button>`).join('');
+    .map((c) => `<button type="button" class="chip ${c.id === categoryId ? 'on' : ''}" data-chip="${esc(c.id)}">${ico(c)}${esc(c.name)}</button>`).join('');
 
   openSheet(`
     <div class="sheet-head"><button class="link-btn" data-close>Cancel</button>
@@ -591,11 +593,29 @@ function openCategorySheet({ cat, spaceId, kind }) {
     <div class="sheet-head"><button class="link-btn" data-close>Cancel</button>
       <h3>${isNew ? 'New category' : 'Edit category'}</h3><button class="link-btn" id="saveCat">Save</button></div>
     <label class="field"><span>Name</span><input id="catName" maxlength="${LIMITS.categoryName}" value="${cat ? esc(cat.name) : ''}" placeholder="e.g. Pets"></label>
+    <div class="field"><span id="iconLabel">Icon</span>
+      <div class="icon-grid" role="radiogroup" aria-labelledby="iconLabel">
+        <button type="button" role="radio" class="icon-auto" data-icon="" aria-label="Automatic icon for the name"><span id="autoIcon"></span><small>Auto</small></button>
+        ${ICON_CHOICES.map((e) => `<button type="button" role="radio" data-icon="${e}" aria-label="${e}">${e}</button>`).join('')}
+      </div>
+    </div>
     ${k === 'expense' ? `<label class="field"><span>Monthly budget (leave empty for none)</span><input id="catBudget" inputmode="decimal" value="${cat ? centsToInput(cat.budget) : ''}" placeholder="0"></label>` : ''}
     <button class="primary" id="saveCat2">Save</button>
     ${cat ? `<button class="secondary" id="archCat">${cat.archived ? 'Show again' : 'Hide category'}</button>
       <p class="note">Hiding keeps past entries but removes the category from lists and the add screen.</p>` : ''}
   `, (root) => {
+    let icon = cat?.icon || '';
+    const paintIcons = () => {
+      $('#autoIcon', root).textContent = categoryIcon($('#catName', root).value);
+      root.querySelectorAll('[data-icon]').forEach((b) => {
+        const on = b.dataset.icon === icon;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-checked', String(on));
+      });
+    };
+    root.querySelectorAll('[data-icon]').forEach((b) => b.addEventListener('click', () => { icon = b.dataset.icon; paintIcons(); }));
+    $('#catName', root).addEventListener('input', paintIcons);
+    paintIcons();
     const save = () => {
       const name = $('#catName', root).value.trim();
       if (!name) { toast('Enter a name'); return; }
@@ -605,7 +625,7 @@ function openCategorySheet({ cat, spaceId, kind }) {
       const budget = budgetRaw.trim() ? toCents(budgetRaw) : 0;
       if (Number.isNaN(budget) || budget < 0) { toast('Budget must be a number'); return; }
       if (budget >= LIMITS.amount) { toast('That budget is too large'); return; }
-      if (isNew) store.addCategory({ spaceId, name, kind: k, budget }); else store.updateCategory(cat.id, { name, budget });
+      if (isNew) store.addCategory({ spaceId, name, kind: k, budget, icon }); else store.updateCategory(cat.id, { name, budget, icon });
       sheet.close();
     };
     $('#saveCat', root).addEventListener('click', save);

@@ -231,6 +231,52 @@ let KEY;
     assert((await data(p)).transactions.some((t) => t.note === 'haircut edited'), 'edit kept as an entry');
   });
 
+  // ---------- category icons ----------
+  await check('every category shows its icon in the add screen, the lists and Settings', async () => {
+    await tab(p, 'personal');
+    await p.click('#addBtn');
+    const chips = await p.$$eval('[data-chip]', (cs) => cs.map((c) => c.textContent.trim()));
+    await cancel(p);
+    assert(chips.includes('🛒Groceries') && chips.includes('⛽Gas') && chips.includes('🏧Cash (ATM)'), chips.slice(0, 6).join(' '));
+    await add(p, { amount: '3', cat: 'Gas', note: 'icon row', date: new Date().toISOString().slice(0, 10) });
+    assert((await p.locator('.tx', { hasText: 'icon row' }).textContent()).includes('⛽'), 'entry row icon');
+    assert((await p.locator('.cat-row', { hasText: 'Gas' }).first().textContent()).includes('⛽'), 'category row icon');
+    await tab(p, 'settings');
+    assert((await p.locator('.set-list li', { hasText: 'Barber' }).first().textContent()).includes('💈'), 'settings icon');
+  });
+
+  await check('pick an icon for a new category; Auto goes back to the icon for its name', async () => {
+    await tab(p, 'settings');
+    await p.locator('[data-addcat][data-kind=expense]').first().click();
+    await p.fill('#catName', 'Pets');
+    assert((await p.textContent('#autoIcon')) === '🏷️', 'unknown name shows the tag');
+    assert(await p.$eval('[data-icon=""]', (b) => b.getAttribute('aria-checked')) === 'true', 'Auto selected by default');
+    await p.click('[data-icon="🐶"]');
+    await p.click('#saveCat2'); await closed(p);
+    assert((await p.locator('.set-list li', { hasText: 'Pets' }).first().textContent()).includes('🐶'));
+    await p.locator('.set-list li', { hasText: 'Groceries' }).first().locator('[data-editcat]').click();
+    await p.click('[data-icon="☕"]');
+    await p.click('#saveCat2'); await closed(p);
+    assert((await p.locator('.set-list li', { hasText: 'Groceries' }).first().textContent()).includes('☕'));
+    await p.locator('.set-list li', { hasText: 'Groceries' }).first().locator('[data-editcat]').click();
+    assert(await p.$eval('[data-icon="☕"]', (b) => b.classList.contains('on')), 'current icon shown as chosen');
+    await p.click('[data-icon=""]');
+    await p.click('#saveCat2'); await closed(p);
+    assert((await p.locator('.set-list li', { hasText: 'Groceries' }).first().textContent()).includes('🛒'));
+    await p.reload();
+    await tab(p, 'settings');
+    assert((await p.locator('.set-list li', { hasText: 'Pets' }).first().textContent()).includes('🐶'), 'kept after reopening');
+  });
+
+  await check('the icon picker fits on the smallest phone and every icon is a 44 px target', async () => {
+    const { p: q, ctx: c2 } = await phone('iPhone SE');
+    await tab(q, 'settings');
+    await q.locator('[data-addcat][data-kind=expense]').first().click();
+    const r = await q.evaluate(() => ({ over: document.querySelector('#sheet').scrollWidth > document.querySelector('#sheet').clientWidth + 1, small: [...document.querySelectorAll('[data-icon]')].filter((b) => { const x = b.getBoundingClientRect(); return x.width < 43.5 || x.height < 43.5; }).length, n: document.querySelectorAll('[data-icon]').length }));
+    await c2.close();
+    assert(!r.over && r.small === 0 && r.n === 41, JSON.stringify(r));
+  });
+
   // ---------- storage ----------
   await check('a broken backup file is refused and nothing is lost', async () => {
     const before = (await data(p)).transactions.length;

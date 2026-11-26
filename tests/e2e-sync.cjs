@@ -36,6 +36,7 @@ function assert(c, msg) { if (!c) throw new Error(msg || 'assertion failed'); }
   const closed = (p) => p.waitForFunction(() => !document.querySelector('#sheet').open);
   const addEntry = async (p, { amount, cat, note, photo }) => {
     await p.click('#addBtn');
+    await p.waitForFunction(() => document.activeElement?.id === 'amount'); // the app focuses it right after opening
     if (photo) {
       await p.setInputFiles('#photoInput', photo);
       await p.waitForFunction(() => /Found|Could not/.test(document.querySelector('#ocrStatus')?.textContent || ''), null, { timeout: 120000 });
