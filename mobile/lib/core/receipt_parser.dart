@@ -111,7 +111,10 @@ class TextPiece {
   /// How much the piece's text line slopes (down is positive, dy/dx).
   final double slope;
 
-  const TextPiece(this.text, this.minX, this.minY, this.maxX, this.maxY, [this.slope = 0]);
+  /// The photo's width divided by its height (as read, after turning). 1 if not known.
+  final double aspect;
+
+  const TextPiece(this.text, this.minX, this.minY, this.maxX, this.maxY, [this.slope = 0, this.aspect = 1]);
 
   factory TextPiece.fromMap(Map m) => TextPiece(
     '${m['text'] ?? ''}',
@@ -120,6 +123,7 @@ class TextPiece {
     (m['maxX'] as num).toDouble(),
     (m['maxY'] as num).toDouble(),
     ((m['slope'] ?? 0) as num).toDouble(),
+    ((m['aspect'] ?? 1) as num).toDouble(),
   );
 
   double get midY => (minY + maxY) / 2;
@@ -146,7 +150,7 @@ class TextLines {
     // another line than its price, so nearby slopes are tried too, closest first, and the one that
     // joins the most pieces into rows wins. Going outwards from the reader's guess matters: a much
     // steeper slope can also join every price, but with the item one row up.
-    final guess = estimateSlope(ps);
+    final guess = slopeFromLeftEdge(ps) ?? estimateSlope(ps);
     var rows = _rows(ps, guess);
     for (var i = 1; i <= 100; i++) {
       for (final s in [guess + i * 0.0025, guess - i * 0.0025]) {
@@ -182,6 +186,33 @@ class TextLines {
       }
     }
     return rows;
+  }
+
+  /// The slope of the rows worked out from the left edge of the text: on a photo taken at an
+  /// angle the lines start a little further right (or left) the lower they are, and the rows
+  /// tilt by the same angle. This is steadier than the slope readers give for each piece.
+  /// Null when there are too few lines to tell.
+  static double? slopeFromLeftEdge(List<TextPiece> ps) {
+    final xs = ps.map((p) => p.minX).toList()..sort();
+    final edge = xs[xs.length ~/ 5];
+    final left = ps.where((p) => p.minX < edge + 0.06).toList()..sort((a, b) => a.midY.compareTo(b.midY));
+    if (left.length < 4 || left.last.midY - left.first.midY < 0.2) return null;
+    // The median of the slopes between all pairs, so one indented line does not matter.
+    final drifts = <double>[];
+    for (var i = 0; i < left.length; i++) {
+      for (var j = i + 1; j < left.length; j++) {
+        final dy = left[j].midY - left[i].midY;
+        if (dy > 0.05) drifts.add((left[j].minX - left[i].minX) / dy);
+      }
+    }
+    if (drifts.isEmpty) return null;
+    drifts.sort();
+    final drift = drifts[drifts.length ~/ 2];
+    // Turning the photo by an angle a moves the left edge by -tan(a) per unit down and tilts the
+    // rows by tan(a), in pixels; in 0...1 units the photo's shape scales both.
+    final a = left.first.aspect;
+    final s = -drift * a * a;
+    return s.abs() < 0.3 ? s : null;
   }
 
   /// The typical slope of the rows: the median slope of the (wide) pieces. 0 if unsure.

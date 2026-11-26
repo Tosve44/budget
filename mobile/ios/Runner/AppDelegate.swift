@@ -67,6 +67,10 @@ class ReceiptOcr: NSObject, FlutterPlugin {
     let supported = (try? request.supportedRecognitionLanguages()) ?? []
     request.recognitionLanguages = ["sl-SI", "hr-HR", "de-DE", "en-US"].filter { supported.contains($0) }
     try VNImageRequestHandler(cgImage: cg, orientation: orientation).perform([request])
+    // Width / height of the photo as Vision reads it (turned), for the row slope in Dart.
+    let sideways: Set<CGImagePropertyOrientation> = [.left, .leftMirrored, .right, .rightMirrored]
+    let aspect = sideways.contains(orientation)
+      ? Double(cg.height) / Double(max(cg.width, 1)) : Double(cg.width) / Double(max(cg.height, 1))
     return (request.results ?? []).compactMap { obs in
       guard let candidate = obs.topCandidates(1).first else { return nil }
       let text = candidate.string
@@ -84,6 +88,7 @@ class ReceiptOcr: NSObject, FlutterPlugin {
         "minX": Double(b.minX), "minY": Double(1 - b.maxY),
         "maxX": Double(b.maxX), "maxY": Double(1 - b.minY),
         "slope": slope,
+        "aspect": aspect,
       ]
     }
   }

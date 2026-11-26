@@ -1,4 +1,6 @@
 // How the pieces of text that the phone reads are joined into receipt lines.
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:budget/core/receipt_parser.dart';
@@ -54,4 +56,17 @@ void main() {
     final pieces = [const TextPiece('Mleko', 0.1, 0.30, 0.4, 0.36, 0.1), const TextPiece('1,29', 0.8, 0.37, 0.9, 0.41, 0.1)];
     expect(TextLines.assemble(pieces), 'Mleko 1,29');
   });
+
+  // What Apple's reader really gave for the two photos taken at an angle (iPhone 16 Pro Max
+  // simulator, iOS 18). Its slopes are noisy: some pieces even tilt the wrong way.
+  for (final (photo, first, second) in [
+    ('engrotus', 'Banane kg 1,62 C', 'Kruh ajdov 400g 2,35 C'),
+    ('mercator2', 'Jogurt Ego 150g 0,69 C', 'Kava Loka 200g 3,79 c'),
+  ]) {
+    test('the iPhone reading of $photo.jpg keeps each price with its own item', () {
+      final raw = jsonDecode(File('test/fixtures/pieces/ios-$photo.json').readAsStringSync()) as List;
+      final lines = TextLines.assemble(raw.map((m) => TextPiece.fromMap(m as Map)).toList()).split('\n');
+      expect(lines, containsAllInOrder([first, second]), reason: lines.join('\n'));
+    });
+  }
 }

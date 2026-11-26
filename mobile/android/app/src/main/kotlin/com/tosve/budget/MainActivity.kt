@@ -73,6 +73,7 @@ object ReceiptOcr {
                                         "maxX" to box.right / w,
                                         "maxY" to box.bottom / h,
                                         "slope" to slope,
+                                        "aspect" to w / h,
                                     ),
                                 )
                             }
