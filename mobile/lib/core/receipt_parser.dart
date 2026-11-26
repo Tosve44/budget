@@ -141,12 +141,15 @@ class TextLines {
   static String assemble(List<TextPiece> pieces) {
     final ps = pieces.where((p) => p.text.trim().isNotEmpty && p.maxY > p.minY).toList();
     if (ps.isEmpty) return '';
-    var rows = _rows(ps, estimateSlope(ps));
-    // Some readers give only straight boxes, or a slope that is off. On a photo taken at an angle
-    // each item then ends up on another line than its price, so small slopes are tried too, and
-    // the one that joins the most pieces into rows wins. A straight photo keeps its rows.
-    for (var i = 0; i <= 50; i++) {
-      for (final s in [i * 0.005, -i * 0.005]) {
+    // The reader's own slope is the best guess, but some readers give only straight boxes (slope
+    // 0) or a slope that is a little off. On a photo taken at an angle each item then lands on
+    // another line than its price, so nearby slopes are tried too, closest first, and the one that
+    // joins the most pieces into rows wins. Going outwards from the reader's guess matters: a much
+    // steeper slope can also join every price, but with the item one row up.
+    final guess = estimateSlope(ps);
+    var rows = _rows(ps, guess);
+    for (var i = 1; i <= 100; i++) {
+      for (final s in [guess + i * 0.0025, guess - i * 0.0025]) {
         final r = _rows(ps, s);
         if (r.length < rows.length) rows = r;
       }

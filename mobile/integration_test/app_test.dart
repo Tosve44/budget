@@ -46,7 +46,7 @@ void main() {
           final total = ReceiptParser.findTotal(text);
           // ignore: avoid_print
           print('OCR ${photo.key}: ${items.length} items, total $total | ${items.take(4).map((i) => '${i.name} ${i.price}').join('; ')}');
-          if (items.isEmpty) {
+          if (items.isEmpty || const {'engrotus.jpg', 'mercator2.jpg'}.contains(photo.key)) {
             // What the phone's reader gave, so a failure can be replayed in a unit test.
             final raw = await const MethodChannel('budget/ocr').invokeListMethod<Map>('read', {'path': file.path, 'rotation': 0});
             // ignore: avoid_print
@@ -58,6 +58,13 @@ void main() {
             // The web app's own test checks the same two things on this photo.
             expect(total, 839, reason: text);
             expect(items.any((i) => i.name.startsWith('MLEKO')), isTrue, reason: text);
+          }
+          // Photos taken at an angle: each price must stay with its own item, not the one above.
+          if (photo.key == 'engrotus.jpg') {
+            expect(items.where((i) => i.name.startsWith('Banane')).map((i) => i.price), [162], reason: text);
+          }
+          if (photo.key == 'mercator2.jpg') {
+            expect(items.where((i) => i.name.startsWith('Jogurt')).map((i) => i.price), [69], reason: text);
           }
         }),
       );

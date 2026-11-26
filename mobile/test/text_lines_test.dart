@@ -38,6 +38,18 @@ void main() {
     expect(TextLines.assemble(pieces).split('\n'), [for (final (n, p) in lines) '$n $p']);
   });
 
+  test('a steep photo with close rows keeps each price with its own item when the reader gives a rough slope', () {
+    // Like engrotus.jpg on iPhone: rows close together, so a nearly flat slope would join each
+    // price with the item one row up. The reader's slope is only roughly right.
+    final angle = -8 * pi / 180;
+    final pieces = [
+      for (var i = 0; i < lines.length; i++)
+        for (final p in row(lines[i].$1, lines[i].$2, 0.3 + i * 0.045, angle))
+          TextPiece(p.text, p.minX, p.minY, p.maxX, p.maxY, tan(angle) * 0.8),
+    ];
+    expect(TextLines.assemble(pieces).split('\n'), [for (final (n, p) in lines) '$n $p']);
+  });
+
   test('a given slope is used as it is', () {
     final pieces = [const TextPiece('Mleko', 0.1, 0.30, 0.4, 0.36, 0.1), const TextPiece('1,29', 0.8, 0.37, 0.9, 0.41, 0.1)];
     expect(TextLines.assemble(pieces), 'Mleko 1,29');
