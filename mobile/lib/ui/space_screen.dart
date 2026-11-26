@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/category_icons.dart';
 import '../core/models.dart';
 import '../core/money.dart';
 import '../core/store.dart';
@@ -102,6 +103,8 @@ class _SpaceScreenState extends State<SpaceScreen> {
             children: [
               Row(
                 children: [
+                  Text(CategoryIcons.of(c), key: Key('categoryIcon.${c.name}')),
+                  const SizedBox(width: 6),
                   Expanded(child: Text(c.name, overflow: TextOverflow.ellipsis)),
                   const SizedBox(width: 8),
                   Flexible(
@@ -379,6 +382,14 @@ class EntryRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         child: Row(
           children: [
+            SizedBox(
+              width: 28,
+              child: Text(
+                store.category(entry.categoryId) == null ? CategoryIcons.fallback : CategoryIcons.of(store.category(entry.categoryId)!),
+                key: const Key('entryIcon'),
+                style: const TextStyle(fontSize: 18),
+              ),
+            ),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

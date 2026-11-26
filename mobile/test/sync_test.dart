@@ -432,6 +432,52 @@ void main() {
   );
 
   test(
+    'category icons go to the other phone; a database without the icon column still syncs',
+    () async {
+      // ICON_COLUMN=yes: the database has categories.icon (the migration ran). Otherwise it has not.
+      final hasColumn = env['ICON_COLUMN'] == 'yes';
+      final t = Phone(), m = Phone();
+      await t.sync.signUp(email('icon-t'), 'secret123');
+      final code = await t.sync.createHousehold('Tosve');
+      await m.sync.signUp(email('icon-m'), 'secret456');
+      await m.sync.joinHousehold(code, 'Milica');
+
+      final groceries = t.cat(t.house, 'Groceries');
+      t.store.updateCategory(groceries.id, icon: '🥦', budget: 30000);
+      final pets = t.store.addCategory(spaceId: t.house.id, name: 'Pets', kind: EntryKind.expense, budget: 2000, icon: '🐶');
+      await t.sync.syncNow();
+      expect(t.sync.pendingCount, 0, reason: 'nothing stuck because of the icon');
+      expect(t.sync.noIconColumn, !hasColumn);
+      await m.sync.syncNow();
+
+      // The rest of the category always arrives; this phone keeps the icon it picked.
+      expect(m.cat(m.house, 'Groceries').budget, 30000);
+      expect(m.cat(m.house, 'Pets').budget, 2000);
+      expect(t.store.category(groceries.id)!.icon, '🥦');
+      expect(t.store.category(pets.id)!.icon, '🐶');
+      if (hasColumn) {
+        expect(m.cat(m.house, 'Groceries').icon, '🥦');
+        expect(m.cat(m.house, 'Pets').icon, '🐶');
+        // Back to the default icon, on both phones.
+        m.store.updateCategory(m.cat(m.house, 'Pets').id, icon: '');
+        await m.sync.syncNow();
+        await t.sync.syncNow();
+        expect(t.store.category(pets.id)!.icon, '');
+      } else {
+        expect(m.cat(m.house, 'Groceries').icon, '', reason: 'shown with the default icon');
+        // A later sync, after another change, still does not lose the icon here.
+        t.store.updateCategory(pets.id, budget: 2500);
+        await t.sync.syncNow();
+        await m.sync.syncNow();
+        expect(m.cat(m.house, 'Pets').budget, 2500);
+        expect(t.store.category(pets.id)!.icon, '🐶');
+      }
+    },
+    skip: skip,
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
+
+  test(
     'this app and the web app share the same data',
     () async {
       final webDir = env['WEB_APP_DIR'], modules = env['NODE_MODULES_DIR'];

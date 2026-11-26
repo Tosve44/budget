@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'category_icons.dart';
 import 'models.dart';
 import 'money.dart';
 
@@ -248,7 +249,7 @@ class BudgetStore {
     );
   }
 
-  Category addCategory({required String spaceId, required String name, required EntryKind kind, int budget = 0}) {
+  Category addCategory({required String spaceId, required String name, required EntryKind kind, int budget = 0, String icon = ''}) {
     final order = data.categories.fold<int>(-1, (m, c) => c.order > m ? c.order : m) + 1;
     final c = Category(
       id: Ids.make('cat'),
@@ -257,6 +258,7 @@ class BudgetStore {
       kind: kind,
       budget: budget.clamp(0, Limits.maxCents),
       order: order,
+      icon: _icon(icon),
       updatedAt: _ts(),
     );
     data.categories.add(c);
@@ -265,9 +267,13 @@ class BudgetStore {
     return c;
   }
 
-  void updateCategory(String id, {String? name, int? budget, bool? archived}) {
+  /// An icon as stored: trimmed, at most [CategoryIcons.maxLength] characters ('' = by name).
+  static String _icon(String icon) => Limits.clip(icon.trim(), CategoryIcons.maxLength);
+
+  void updateCategory(String id, {String? name, int? budget, bool? archived, String? icon}) {
     final c = category(id);
     if (c == null) return;
+    if (icon != null) c.icon = _icon(icon);
     if (name != null) c.name = Limits.clip(name.trim(), Limits.categoryName);
     if (budget != null) c.budget = budget.clamp(0, Limits.maxCents);
     if (archived != null) c.archived = archived;

@@ -109,6 +109,9 @@ class Category {
   /// Hidden categories keep their past entries but are left out of lists and totals.
   bool archived;
 
+  /// The emoji picked for it; empty = the default for its name (see CategoryIcons).
+  String icon;
+
   /// When a phone last changed it (sync: the newest change wins).
   String? updatedAt;
 
@@ -120,6 +123,7 @@ class Category {
     this.budget = 0,
     required this.order,
     this.archived = false,
+    this.icon = '',
     this.updatedAt,
   });
 
@@ -131,6 +135,7 @@ class Category {
     budget: _int(j['budget']),
     order: _int(j['order']),
     archived: j['archived'] == true,
+    icon: j['icon'] is String ? j['icon'] as String : '',
     updatedAt: j['updatedAt'] as String?,
   );
 
@@ -142,6 +147,7 @@ class Category {
     'budget': budget,
     'order': order,
     'archived': archived,
+    if (icon.isNotEmpty) 'icon': icon,
     if (updatedAt != null) 'updatedAt': updatedAt,
   };
 

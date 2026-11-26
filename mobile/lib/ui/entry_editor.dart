@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/category_icons.dart';
 import '../core/entry_draft.dart';
 import '../core/models.dart';
 import '../core/money.dart';
@@ -252,6 +253,7 @@ class _EntryEditorState extends State<EntryEditor> {
                 for (final c in cats)
                   ChoiceChip(
                     key: Key('chip.${c.name}'),
+                    avatar: Text(CategoryIcons.of(c), key: Key('chipIcon.${c.name}')),
                     label: Text(c.name),
                     selected: draft.categoryId == c.id,
                     onSelected: (_) => setState(() {

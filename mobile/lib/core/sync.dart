@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'category_icons.dart';
 import 'models.dart';
 import 'money.dart';
 import 'store.dart';
@@ -83,6 +84,7 @@ class CloudRows {
     'budget': Limits.clamp(c.budget),
     'sort_order': c.order,
     'archived': c.archived,
+    'icon': Limits.clip(c.icon, CategoryIcons.maxLength),
     'deleted': deleted,
     'updated_at': c.updatedAt ?? '2000-01-01T00:00:00.000Z',
   };
@@ -98,6 +100,7 @@ class CloudRows {
       budget: asInt(r['budget']),
       order: asInt(r['sort_order']),
       archived: r['archived'] == true,
+      icon: r['icon'] is String ? r['icon'] as String : '',
       updatedAt: Timestamps.iso(r['updated_at']),
     );
   }
@@ -564,7 +567,7 @@ class SyncEngine {
       if (rows.isEmpty) continue;
       for (var start = 0; start < rows.length; start += 200) {
         final chunk = rows.sublist(start, start + 200 > rows.length ? rows.length : start + 200);
-        final accepted = (await client.upsert(table.name, chunk)).toSet();
+        final accepted = (await _upsert(table, chunk)).toSet();
         // The server ignores an edit older than its own copy (the partner changed it later).
         // Fetch the winning version of those rows so this phone shows it.
         final lost = [
@@ -715,6 +718,24 @@ class SyncEngine {
     return true;
   }
 
+  /// True once the cloud database said it has no `icon` column for categories (it was set up
+  /// before category icons). Icons then stay on this phone until the column is added.
+  bool noIconColumn = false;
+
+  Future<List<String>> _upsert(SyncTable table, List<Row> rows) async {
+    if (table != SyncTable.categories) return client.upsert(table.name, rows);
+    List<Row> withoutIcon() => [for (final r in rows) Map.of(r)..remove('icon')];
+    if (noIconColumn) return client.upsert(table.name, withoutIcon());
+    try {
+      return await client.upsert(table.name, rows);
+    } on SupabaseError catch (e) {
+      final missingColumn = e.code == 'PGRST204' || e.code == '42703';
+      if (!missingColumn || !e.message.contains('icon')) rethrow;
+      noIconColumn = true;
+      return client.upsert(table.name, withoutIcon());
+    }
+  }
+
   bool _apply(SyncTable table, List<Row> rows, {required bool force}) {
     final d = store.data;
     final changed = _merge(table, rows, d, force: force);
@@ -757,6 +778,8 @@ class SyncEngine {
         }
         final next = CloudRows.category(r);
         if (next == null) continue;
+        // A cloud database from before category icons has no icon column: keep this phone's.
+        if (!r.containsKey('icon') && i != null) next.icon = d.categories[i].icon;
         if (i != null) {
           if (d.categories[i] != next) {
             d.categories[i] = next;

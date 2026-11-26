@@ -275,6 +275,42 @@ final flows = <String, Future<void> Function(WidgetTester)>{
     await tapKey(tester, 'toggleHidden');
     expect(model.store.category(pets.id)!.archived, isTrue);
   },
+  'category icons: defaults by name, pick one, back to default': (tester) async {
+    final model = await pumpApp(tester, demo: true);
+    // Every default category has its own icon, shown on the month screen.
+    await reveal(tester, find.byKey(const Key('categoryIcon.Rent')));
+    expect(tester.widget<Text>(find.byKey(const Key('categoryIcon.Rent')).first).data, '🏠');
+    await tapKey(tester, 'tab.settings');
+    await tapKey(tester, 'editPersonalCategories');
+    await tapKey(tester, 'addCategory.expense');
+    await typeInto(tester, 'categoryName', 'Pets');
+    await tapKey(tester, 'iconField');
+    await tapKey(tester, 'iconChoice.🐶');
+    expect(tester.widget<Text>(find.byKey(const Key('iconShown'))).data, '🐶');
+    await tapKey(tester, 'saveCategory');
+    final pets = model.store.data.categories.where((c) => c.name == 'Pets').single;
+    expect(pets.icon, '🐶');
+    // Change it, then go back to the default for the name.
+    await tapKey(tester, 'categoryRow.Pets');
+    await tapKey(tester, 'iconField');
+    await tapKey(tester, 'iconChoice.🎁');
+    await tapKey(tester, 'saveCategory');
+    expect(model.store.category(pets.id)!.icon, '🎁');
+    await tapKey(tester, 'categoryRow.Pets');
+    await tapKey(tester, 'iconField');
+    await tapKey(tester, 'iconDefault');
+    await tapKey(tester, 'saveCategory');
+    expect(model.store.category(pets.id)!.icon, '');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    // The add form shows the icons on the category chips.
+    await tapKey(tester, 'tab.personal');
+    await tapKey(tester, 'addExpense');
+    await reveal(tester, find.byKey(const Key('chipIcon.Groceries')));
+    expect(tester.widget<Text>(find.byKey(const Key('chipIcon.Groceries')).first).data, '🛒');
+    await reveal(tester, find.byKey(const Key('chipIcon.Pets')));
+    expect(tester.widget<Text>(find.byKey(const Key('chipIcon.Pets')).first).data, '🏷️');
+  },
   'who uses the phone, and the partner balance': (tester) async {
     final model = await pumpApp(tester);
     final s = model.store;

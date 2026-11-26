@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../app_model.dart';
+import '../core/category_icons.dart';
 import '../core/models.dart';
 import '../core/money.dart';
 import '../core/prices.dart';
@@ -363,6 +364,7 @@ class CategoriesScreen extends StatelessWidget {
                     color: Theme.of(context).scaffoldBackgroundColor,
                     child: ListTile(
                       key: Key('categoryRow.${c.name}'),
+                      leading: Text(CategoryIcons.of(c), style: const TextStyle(fontSize: 22)),
                       title: Text(c.name, style: TextStyle(color: c.archived ? Palette.of(context).muted : null)),
                       subtitle: Text(
                         c.archived
@@ -433,6 +435,10 @@ class _CategoryEditorState extends State<CategoryEditor> {
   late final budget = TextEditingController(text: Money.inputText(widget.category?.budget ?? 0));
   String? problem;
 
+  /// The picked icon; empty means the default icon for the name.
+  late String icon = widget.category?.icon.trim() ?? '';
+  bool pickingIcon = false;
+
   @override
   void dispose() {
     name.dispose();
@@ -456,9 +462,15 @@ class _CategoryEditorState extends State<CategoryEditor> {
     if (b > Limits.maxCents) return setState(() => problem = 'That budget is too big.');
     final c = widget.category;
     if (c != null) {
-      model.store.updateCategory(c.id, name: n, budget: widget.kind == EntryKind.expense ? b : null);
+      model.store.updateCategory(c.id, name: n, budget: widget.kind == EntryKind.expense ? b : null, icon: icon);
     } else {
-      model.store.addCategory(spaceId: widget.spaceId, name: n, kind: widget.kind, budget: widget.kind == EntryKind.expense ? b : 0);
+      model.store.addCategory(
+        spaceId: widget.spaceId,
+        name: n,
+        kind: widget.kind,
+        budget: widget.kind == EntryKind.expense ? b : 0,
+        icon: icon,
+      );
     }
     Navigator.pop(context);
   }
@@ -488,6 +500,45 @@ class _CategoryEditorState extends State<CategoryEditor> {
               controller: budget,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'Monthly budget (leave empty for none)'),
+            ),
+          const SizedBox(height: 8),
+          ListenableBuilder(
+            listenable: name,
+            builder: (context, _) => ListTile(
+              key: const Key('iconField'),
+              contentPadding: EdgeInsets.zero,
+              leading: Text(
+                icon.isNotEmpty ? icon : CategoryIcons.forName(name.text),
+                key: const Key('iconShown'),
+                style: const TextStyle(fontSize: 26),
+              ),
+              title: const Text('Icon'),
+              subtitle: Text(icon.isEmpty ? 'Default for this name' : 'Picked'),
+              trailing: Text(pickingIcon ? 'Done' : 'Change'),
+              onTap: () => setState(() => pickingIcon = !pickingIcon),
+            ),
+          ),
+          if (pickingIcon)
+            Wrap(
+              key: const Key('iconChoices'),
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                ChoiceChip(
+                  key: const Key('iconDefault'),
+                  label: const Text('Default'),
+                  selected: icon.isEmpty,
+                  onSelected: (_) => setState(() => icon = ''),
+                ),
+                for (final e in CategoryIcons.choices)
+                  ChoiceChip(
+                    key: Key('iconChoice.$e'),
+                    label: Text(e, style: const TextStyle(fontSize: 20)),
+                    showCheckmark: false,
+                    selected: icon == e,
+                    onSelected: (_) => setState(() => icon = e),
+                  ),
+              ],
             ),
           if (problem != null)
             Padding(

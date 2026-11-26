@@ -44,7 +44,7 @@ jobs:
           git diff --exit-code --stat -- test/fixtures ':!test/fixtures/webdata.json' || echo "::warning::The web app's logic changed; golden files were regenerated for this run."
       - run: flutter analyze
       - name: Logic and golden tests
-        run: flutter test test/golden_test.dart test/text_lines_test.dart
+        run: flutter test test/golden_test.dart test/text_lines_test.dart test/category_icons_test.dart
       - name: Screens on 8 phone sizes x 2 text sizes
         run: flutter test test/screens_test.dart
       - name: Install PostgreSQL
@@ -60,6 +60,14 @@ jobs:
           WEB_APP_DIR: ${{ github.workspace }}
           NODE_MODULES_DIR: /tmp/budget-test-backend/node_modules
         run: flutter test test/sync_test.dart
+      - name: Sync tests again with the category icon column added
+        env:
+          SUPABASE_TEST_URL: http://localhost:54321
+          ICON_COLUMN: 'yes'
+        run: |
+          psql -h /tmp -p 54329 -U postgres -d budget_test -v ON_ERROR_STOP=1 \
+            -c "alter table public.categories add column if not exists icon text check (icon is null or char_length(icon) <= 16)"
+          flutter test test/sync_test.dart --plain-name 'category icons'
 
   android-build:
     name: Android test app (built once)
