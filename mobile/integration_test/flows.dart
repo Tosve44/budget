@@ -31,6 +31,12 @@ Future<void> reveal(WidgetTester tester, Finder f) async {
     await tester.pumpAndSettle();
   }
   await tester.ensureVisible(f.first);
+  // Bring it towards the middle, away from bars and messages at the bottom of the screen.
+  final element = tester.element(f.first);
+  if (Scrollable.maybeOf(element) != null) {
+    await Scrollable.ensureVisible(element, alignment: 0.3);
+    await tester.pumpAndSettle();
+  }
 }
 
 Future<void> tapKey(WidgetTester tester, String key) async {
@@ -67,6 +73,17 @@ Future<void> typeInto(WidgetTester tester, String key, String text) async {
     debugPrint('typeInto $key: attempt ${attempt + 1} left "$typed", focus on ${FocusManager.instance.primaryFocus}');
   }
   expect(typed, text, reason: 'typing into $key');
+}
+
+/// Taps "Take photo" and waits until [done] shows. A tap can land while the screen is still
+/// moving or under a message on a slow phone; a person would tap again, and so does this.
+Future<void> scanReceipt(WidgetTester tester, Finder done) async {
+  for (var attempt = 0; attempt < 3; attempt++) {
+    await tapKey(tester, 'scanReceipt');
+    await waitFor(tester, done, timeout: const Duration(seconds: 20));
+    if (done.evaluate().isNotEmpty) return;
+    debugPrint('scanReceipt: nothing read after tap ${attempt + 1}');
+  }
 }
 
 /// Waits for something that the app does in the background, such as reading a photo, which on a
@@ -151,14 +168,7 @@ final flows = <String, Future<void> Function(WidgetTester)>{
   'a receipt photo fills in the items and the total, and Prices shows them': (tester) async {
     final model = await pumpApp(tester);
     await tapKey(tester, 'addEntry');
-    await tapKey(tester, 'scanReceipt');
-    await waitFor(tester, find.byKey(const Key('readNote')), timeout: const Duration(seconds: 20));
-    if (find.byKey(const Key('readNote')).evaluate().isEmpty) {
-      // The tap can land while the screen is still moving on a slow phone; a person would tap again.
-      debugPrint('receipt: no note after the first tap (photo shown: ${find.byKey(const Key('receiptThumb')).evaluate().isNotEmpty})');
-      await tapKey(tester, 'scanReceipt');
-      await waitFor(tester, find.byKey(const Key('readNote')));
-    }
+    await scanReceipt(tester, find.byKey(const Key('readNote')));
     expect(find.byKey(const Key('readNote')), findsOneWidget);
     expect(find.textContaining('Found 2 items'), findsOneWidget);
     await reveal(tester, find.byKey(const Key('amountField')));
@@ -175,7 +185,7 @@ final flows = <String, Future<void> Function(WidgetTester)>{
     // The second time, each item is compared with the first.
     await tapKey(tester, 'tab.personal');
     await tapKey(tester, 'addEntry');
-    await tapKey(tester, 'scanReceipt');
+    await scanReceipt(tester, find.byKey(const Key('itemPrice.0')));
     await typeInto(tester, 'itemPrice.0', '1,39');
     expect(find.textContaining('▲ +7.8%'), findsOneWidget);
     expect(find.textContaining('Same as'), findsOneWidget);
