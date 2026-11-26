@@ -25,7 +25,7 @@ void main() {
     // ignore: avoid_print
     print(
       'DEVICE ${Platform.operatingSystem} ${Platform.operatingSystemVersion} | screen ${size.width.round()}x${size.height.round()} '
-      '@${v.devicePixelRatio}x | text x${PlatformDispatcher.instance.textScaleFactor}',
+      '@${v.devicePixelRatio}x | text x${PlatformDispatcher.instance.textScaleFactor} | ${PlatformDispatcher.instance.platformBrightness.name}',
     );
   });
 
