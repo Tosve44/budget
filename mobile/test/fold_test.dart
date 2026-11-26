@@ -70,4 +70,22 @@ void main() {
       });
     });
   }
+
+  testWidgets('the category screen survives a keyboard height below zero (iOS, while it closes)', (tester) async {
+    tester.view.devicePixelRatio = 3;
+    tester.view.physicalSize = const Size(402, 874) * 3;
+    addTearDown(tester.view.reset);
+    await pumpApp(tester);
+    await tapKey(tester, 'tab.settings');
+    await tapKey(tester, 'editPersonalCategories');
+    await tapKey(tester, 'categoryRow.Rent');
+    await tapKey(tester, 'iconField');
+    for (final bottom in [-90.0, 300.0 * 3, -3.0, 0.0]) {
+      tester.view.viewInsets = FakeViewPadding(bottom: bottom);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'keyboard $bottom');
+    }
+    await tapKey(tester, 'iconChoice.🏨');
+    await tapKey(tester, 'saveCategory');
+  });
 }

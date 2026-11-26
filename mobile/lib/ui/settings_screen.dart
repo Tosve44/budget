@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -414,8 +415,10 @@ Future<void> showCategoryEditor(BuildContext context, {required String spaceId, 
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+    builder: (sheet) => Padding(
+      // Room for the keyboard. iOS can report a keyboard height below zero for a moment while the
+      // keyboard closes, so it is never less than 0.
+      padding: EdgeInsets.only(bottom: math.max(0.0, MediaQuery.viewInsetsOf(sheet).bottom)),
       child: CategoryEditor(spaceId: spaceId, kind: kind, category: category),
     ),
   );
