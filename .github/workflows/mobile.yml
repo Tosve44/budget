@@ -45,7 +45,7 @@ jobs:
       - run: flutter analyze
       - name: Logic and golden tests
         run: flutter test test/golden_test.dart test/text_lines_test.dart test/category_icons_test.dart
-      - name: Screens on 8 phone sizes x 2 text sizes
+      - name: Screens on 12 phone sizes x 2 text sizes, and folding
         run: flutter test test/screens_test.dart test/fold_test.dart
       - name: Install PostgreSQL
         run: |
@@ -190,11 +190,11 @@ jobs:
             xcrun simctl bootstatus "$SIM" -b
           fi
       - name: Run on the simulator
-        timeout-minutes: 30
+        timeout-minutes: 45
         run: |
           set -o pipefail
-          { echo "Simulator: ${{ matrix.device }} | $(xcrun simctl list devices | grep "$SIM" | head -1 | xargs) | Xcode $(xcodebuild -version | head -1)"; } | tee device-test.log
-          flutter test integration_test/app_test.dart -d "$SIM" --reporter expanded 2>&1 | tee -a device-test.log
+          { echo "Simulator: ${{ matrix.device }} | $(xcrun simctl list devices | grep "$SIM" | head -1 | xargs) | Xcode $(xcodebuild -version | sed -n 1p)"; } | tee device-test.log
+          bash tool/ci-ios-test.sh "$SIM" device-test.log
       - name: Summary
         if: always()
         env:
@@ -256,8 +256,8 @@ jobs:
         timeout-minutes: 40
         run: |
           set -o pipefail
-          { echo "Simulator: iPhone Duo | $(xcrun simctl list devices | grep "$SIM" | head -1 | xargs) | Xcode $(xcodebuild -version | head -1)"; } | tee device-test.log
-          flutter test integration_test/app_test.dart -d "$SIM" --reporter expanded 2>&1 | tee -a device-test.log
+          { echo "Simulator: iPhone Duo | $(xcrun simctl list devices | grep "$SIM" | head -1 | xargs) | Xcode $(xcodebuild -version | sed -n 1p)"; } | tee device-test.log
+          bash tool/ci-ios-test.sh "$SIM" device-test.log
       - name: Summary
         if: always() && env.DUO == 'yes'
         run: |
