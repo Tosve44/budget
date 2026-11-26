@@ -10,7 +10,8 @@ adb shell settings put system font_scale "$FONT" || true
 adb shell cmd uimode night "$DARK" || true
 for a in window_animation_scale transition_animation_scale animator_duration_scale; do adb shell settings put global "$a" 0 || true; done
 adb shell input keyevent 82 || true
-echo "Emulator: $(adb shell getprop ro.product.model) | Android $(adb shell getprop ro.build.version.release) (API $(adb shell getprop ro.build.version.sdk)) | $(adb shell wm size | tail -1) | $(adb shell wm density | tail -1) | font x$FONT | dark $DARK" | tee "$LOG"
+prop() { adb -s emulator-5554 shell "$@" </dev/null 2>/dev/null | tr -d '\r' | tail -1; }
+echo "Emulator: $(prop getprop ro.product.model) | Android $(prop getprop ro.build.version.release) (API $(prop getprop ro.build.version.sdk)) | $(prop wm size) | $(prop wm density) | font x$FONT | dark $DARK" | tee "$LOG"
 flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart \
   --use-application-binary="$APK" -d emulator-5554 2>&1 | tee -a "$LOG"
 exit "${PIPESTATUS[0]}"
