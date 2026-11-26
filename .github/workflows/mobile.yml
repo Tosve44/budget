@@ -46,7 +46,7 @@ jobs:
       - name: Logic and golden tests
         run: flutter test test/golden_test.dart test/text_lines_test.dart test/category_icons_test.dart
       - name: Screens on 8 phone sizes x 2 text sizes
-        run: flutter test test/screens_test.dart
+        run: flutter test test/screens_test.dart test/fold_test.dart
       - name: Install PostgreSQL
         run: |
           sudo apt-get update -qq
@@ -207,6 +207,67 @@ jobs:
         if: always()
         with:
           name: ios-${{ matrix.ios }}-${{ strategy.job-index }}
+          path: mobile/device-test.log
+
+  iphone-duo:
+    name: iPhone Duo (foldable), if GitHub's Macs have its simulator
+    needs: logic
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Look for an iPhone Duo simulator in every Xcode on the Mac
+        run: |
+          echo "Xcodes on this Mac:"; ls -d /Applications/Xcode*.app
+          FOUND=""
+          for X in $(ls -d /Applications/Xcode*.app | sort -rV); do
+            V="$(DEVELOPER_DIR=$X/Contents/Developer xcodebuild -version 2>/dev/null | head -1)"
+            T="$(DEVELOPER_DIR=$X/Contents/Developer xcrun simctl list devicetypes 2>/dev/null | grep -i 'duo' || true)"
+            echo "$X ($V): ${T:-no iPhone Duo}"
+            if [ -n "$T" ] && [ -z "$FOUND" ]; then FOUND="$X"; DUO_TYPE="$(echo "$T" | head -1 | sed -E 's/.*\((com\.apple[^)]*)\).*/\1/')"; fi
+          done
+          if [ -z "$FOUND" ]; then
+            echo "DUO=no" >> "$GITHUB_ENV"
+            { echo "### iPhone Duo"; echo "No iPhone Duo simulator in any Xcode on GitHub's macos-26 Mac:"; ls -d /Applications/Xcode*.app | sed 's/^/    /'; } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          sudo xcode-select -s "$FOUND/Contents/Developer"
+          echo "DUO=yes" >> "$GITHUB_ENV"; echo "DUO_TYPE=$DUO_TYPE" >> "$GITHUB_ENV"
+          echo "Using $FOUND, device type $DUO_TYPE"
+          echo "simctl commands (looking for folding):"; xcrun simctl help | grep -iE 'fold|posture|hinge|ui ' || true
+          xcrun simctl help ui 2>&1 | head -40 || true
+      - uses: subosito/flutter-action@v2
+        if: env.DUO == 'yes'
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - if: env.DUO == 'yes'
+        run: flutter pub get
+      - name: Make the iPhone Duo simulator
+        if: env.DUO == 'yes'
+        run: |
+          SIM="$(bash tool/ci-simulator.sh "${DUO_TYPE#com.apple.CoreSimulator.SimDeviceType.}")"
+          echo "SIM=$SIM" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIM" || true
+          xcrun simctl bootstatus "$SIM" -b
+      - name: Run on the iPhone Duo simulator
+        if: env.DUO == 'yes'
+        timeout-minutes: 40
+        run: |
+          set -o pipefail
+          { echo "Simulator: iPhone Duo | $(xcrun simctl list devices | grep "$SIM" | head -1 | xargs) | Xcode $(xcodebuild -version | head -1)"; } | tee device-test.log
+          flutter test integration_test/app_test.dart -d "$SIM" --reporter expanded 2>&1 | tee -a device-test.log
+      - name: Summary
+        if: always() && env.DUO == 'yes'
+        run: |
+          { echo "### iPhone Duo"; head -1 device-test.log 2>/dev/null;
+            grep -E "(DEVICE|OCR|RESULT) " device-test.log 2>/dev/null | sed 's/^/    /';
+            grep -E "All tests passed|Some tests failed|\[E\]" device-test.log 2>/dev/null | tail -15; } >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always() && env.DUO == 'yes'
+        with:
+          name: ios-iphone-duo
           path: mobile/device-test.log
 
   builds:

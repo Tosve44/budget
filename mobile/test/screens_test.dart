@@ -15,6 +15,12 @@ const screens = <String, Size>{
   'Galaxy Z Fold (open)': Size(673, 841),
   'small Android': Size(320, 640),
   'Pixel tablet (landscape)': Size(1280, 800),
+  // iPhone Duo (foldable, 2026): 5.4" outer and 7.6" inner screen, both 1.41:1. Sizes in points
+  // worked out from Apple's specs; the outer screen is wide when the phone is held normally.
+  'iPhone Duo folded (outer screen)': Size(670, 475),
+  'iPhone Duo folded, turned': Size(475, 670),
+  'iPhone Duo open (inner screen)': Size(668, 942),
+  'iPhone Duo open, turned': Size(942, 668),
 };
 
 void main() {
