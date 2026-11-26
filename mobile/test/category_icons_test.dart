@@ -1,6 +1,7 @@
 // Category icons: every default category has its own icon, a picked icon wins, and the icon
 // survives saving and loading.
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:budget/core/category_icons.dart';
 import 'package:budget/core/models.dart';
@@ -22,6 +23,16 @@ void main() {
     }
     expect(CategoryIcons.forName('  RENT '), '🏠', reason: 'case and spaces do not matter');
     expect(CategoryIcons.forName('Pets'), CategoryIcons.fallback);
+  });
+
+  test('the same icons as the web app (store.js)', () {
+    final js = File('../store.js').readAsStringSync();
+    final icons = RegExp(r'const ICONS = \{([^}]*)\}').firstMatch(js)!.group(1)!;
+    final web = {for (final m in RegExp(r"'([^']+)':\s*'([^']+)'").allMatches(icons)) m.group(1)!: m.group(2)!};
+    expect(CategoryIcons.byName, web);
+    final choices = RegExp(r'ICON_CHOICES = \[([^\]]*)\]').firstMatch(js)!.group(1)!;
+    expect(CategoryIcons.choices, [for (final m in RegExp(r"'([^']+)'").allMatches(choices)) m.group(1)!]);
+    expect(CategoryIcons.fallback, RegExp(r"DEFAULT_ICON = '([^']+)'").firstMatch(js)!.group(1));
   });
 
   test('the icons to pick from are all different and short enough to save', () {

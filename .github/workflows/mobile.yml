@@ -59,14 +59,14 @@ jobs:
           SUPABASE_TEST_URL: http://localhost:54321
           WEB_APP_DIR: ${{ github.workspace }}
           NODE_MODULES_DIR: /tmp/budget-test-backend/node_modules
+          ICON_COLUMN: 'yes'
         run: flutter test test/sync_test.dart
-      - name: Sync tests again with the category icon column added
+      - name: Sync tests again on a database from before category icons
         env:
           SUPABASE_TEST_URL: http://localhost:54321
-          ICON_COLUMN: 'yes'
+          ICON_COLUMN: 'no'
         run: |
-          psql -h /tmp -p 54329 -U postgres -d budget_test -v ON_ERROR_STOP=1 \
-            -c "alter table public.categories add column if not exists icon text check (icon is null or char_length(icon) <= 16)"
+          psql -h /tmp -p 54329 -U postgres -d budget_test -v ON_ERROR_STOP=1 -c "alter table public.categories drop column icon"
           flutter test test/sync_test.dart --plain-name 'category icons'
 
   android-build:

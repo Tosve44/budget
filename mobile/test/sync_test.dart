@@ -434,8 +434,8 @@ void main() {
   test(
     'category icons go to the other phone; a database without the icon column still syncs',
     () async {
-      // ICON_COLUMN=yes: the database has categories.icon (the migration ran). Otherwise it has not.
-      final hasColumn = env['ICON_COLUMN'] == 'yes';
+      // The database has categories.icon (the migration ran), unless ICON_COLUMN=no.
+      final hasColumn = env['ICON_COLUMN'] != 'no';
       final t = Phone(), m = Phone();
       await t.sync.signUp(email('icon-t'), 'secret123');
       final code = await t.sync.createHousehold('Tosve');
