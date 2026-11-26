@@ -16,13 +16,15 @@ export function categoryToRow(c) {
   return {
     id: c.id, space_id: c.spaceId, name: c.name, kind: c.kind, budget: c.budget || 0,
     sort_order: c.order || 0, archived: !!c.archived, deleted: !!c.deleted,
-    updated_at: c.updatedAt || '2000-01-01T00:00:00.000Z',
+    updated_at: c.updatedAt || '2000-01-01T00:00:00.000Z', icon: c.icon || '',
   };
 }
 export function rowToCategory(r) {
   return {
     id: r.id, spaceId: r.space_id, name: r.name, kind: r.kind, budget: Number(r.budget),
     order: r.sort_order, archived: r.archived, updatedAt: iso(r.updated_at),
+    // (No icon column in the cloud yet: leave the phone's own icon alone.)
+    ...('icon' in r ? { icon: r.icon || '' } : {}),
   };
 }
 export function txToRow(t, receiptPath) {
@@ -320,7 +322,12 @@ export class Sync {
       if (!rows.length) continue;
       for (let i = 0; i < rows.length; i += 200) {
         const chunk = rows.slice(i, i + 200);
-        const { data, error } = await this.client.from(table).upsert(chunk, { onConflict: 'id' }).select('id');
+        let { data, error } = await this.client.from(table).upsert(chunk, { onConflict: 'id' }).select('id');
+        if (error && table === 'categories' && /icon/.test(error.message || '') && /column|schema/i.test(error.message || '')) {
+          // The cloud database doesn't have the icon column yet (its update has not been run):
+          // upload without icons, so syncing keeps working. Icons stay on this phone.
+          ({ data, error } = await this.client.from(table).upsert(chunk.map(({ icon, ...r }) => r), { onConflict: 'id' }).select('id'));
+        }
         if (error) throw friendly(error);
         // The server ignores an edit that is older than its own copy (the partner changed it
         // later). Fetch the winning version of those rows so this phone shows it.

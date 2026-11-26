@@ -255,3 +255,12 @@ button.stat:active { background: var(--accent-soft); }
 .card form .primary { margin-bottom: 0; }
 
 .toast-alert { background: var(--over); color: #fff; border-radius: 14px; width: min(92vw, 420px); text-align: center; }
+/* Category icons */
+.cat-ico { display: inline-block; width: 1.4em; text-align: center; margin-right: 0.35em; font-style: normal; flex-shrink: 0; }
+.chip .cat-ico, .filter-chip .cat-ico { width: auto; margin-right: 0.3em; }
+.tx-cat { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; }
+.icon-grid button { min-height: 44px; min-width: 0; border: 1px solid var(--line); background: var(--surface-2); border-radius: 12px; font-size: 1.3rem; line-height: 1; padding: 0; }
+.icon-grid button.on { border: 2px solid var(--accent); background: var(--accent-soft); }
+.icon-grid .icon-auto { grid-column: span 2; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.icon-grid .icon-auto small { font-size: 0.765rem; color: var(--muted); }
