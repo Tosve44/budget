@@ -26,11 +26,15 @@ class _SpaceScreenState extends State<SpaceScreen> {
   String get defaultDate => month == DateKey.month() ? DateKey.day() : '$month-01';
 
   Future<void> openEditor(Space space, {Transaction? edit, EntryKind kind = EntryKind.expense}) async {
-    final saved = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => EntryEditor(draftSpaceId: space.id, editing: edit, kind: kind, defaultDate: defaultDate),
-      ),
+    // A sheet that slides up, and closes again with a swipe down (like on the web app). A short
+    // swipe springs back and keeps what was typed.
+    final saved = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      enableDrag: true,
+      builder: (_) => EntryEditor(draftSpaceId: space.id, editing: edit, kind: kind, defaultDate: defaultDate),
     );
     // After saving, show the month the entry is in.
     if (saved != null && mounted) setState(() => month = saved.substring(0, 7));
