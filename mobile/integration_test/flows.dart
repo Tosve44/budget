@@ -30,10 +30,14 @@ String eur(int cents) => Money.format(cents);
 /// Scrolls the screen until [f] is built (long lists build only what is on screen).
 Future<void> reveal(WidgetTester tester, Finder f) async {
   if (f.evaluate().isEmpty) {
-    // Start from the top, then scroll down until it shows up.
-    final list = find.byType(Scrollable).first;
-    final position = tester.state<ScrollableState>(list).position;
-    if (position.pixels != 0) position.jumpTo(0);
+    // Start from the top, then scroll down until it shows up. Every list goes back to the top:
+    // the first one found can be the screen behind the one in front.
+    for (final e in find.byType(Scrollable).evaluate()) {
+      final position = (e as StatefulElement).state as ScrollableState;
+      if (position.position.hasPixels && position.position.pixels != position.position.minScrollExtent) {
+        position.position.jumpTo(position.position.minScrollExtent);
+      }
+    }
     await tester.pumpAndSettle();
   }
   for (var i = 0; i < 80 && f.evaluate().isEmpty; i++) {
