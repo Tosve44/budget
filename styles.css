@@ -267,3 +267,10 @@ button.stat:active { background: var(--accent-soft); }
 .icon-grid button.on { border: 2px solid var(--accent); background: var(--accent-soft); }
 .icon-grid .icon-auto { grid-column: span 2; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .icon-grid .icon-auto small { font-size: 0.765rem; color: var(--muted); }
+
+/* "+ New category" on the add-entry sheet, and the small form it opens there. */
+.chip.chip-new { border-style: dashed; background: transparent; color: var(--accent); }
+.new-cat { margin: 4px 0 12px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); }
+.new-cat .icon-grid { max-height: 150px; overflow-y: auto; }
+.new-cat-actions { display: flex; gap: 8px; margin-top: 10px; }
+.new-cat-actions button { flex: 1; margin: 0; }

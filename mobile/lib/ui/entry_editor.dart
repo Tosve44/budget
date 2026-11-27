@@ -9,6 +9,7 @@ import '../core/prices.dart';
 import '../core/store.dart';
 import 'home.dart';
 import 'premium_screen.dart';
+import 'settings_screen.dart';
 import 'widgets.dart';
 
 /// Add or change an entry. A receipt photo fills in the items and the total.
@@ -189,6 +190,19 @@ class _EntryEditorState extends State<EntryEditor> {
     if (mounted) Navigator.pop(context);
   }
 
+  Future<void> newCategory() async {
+    final model = ModelScope.read(context);
+    _readLines();
+    // Categories of your own are part of Premium.
+    if (!PlanRules.canAddCustomCategory(model.plan)) return openPremium(context, because: PremiumFeature.categories);
+    final id = await showCategoryEditor(context, spaceId: draft.spaceId, kind: draft.kind, pickExisting: true);
+    if (id == null || !mounted) return;
+    setState(() {
+      draft.categoryId = id;
+      problem = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final model = ModelScope.of(context);
@@ -255,7 +269,6 @@ class _EntryEditorState extends State<EntryEditor> {
             const SizedBox(height: 4),
             Text('Category', style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 6),
-            if (cats.isEmpty) const Muted('No categories. Add one in Settings.'),
             Wrap(
               key: const Key('categoryChips'),
               spacing: 6,
@@ -272,6 +285,13 @@ class _EntryEditorState extends State<EntryEditor> {
                       problem = null;
                     }),
                   ),
+                // A new category made right here; what was typed so far stays, and it is picked.
+                ActionChip(
+                  key: const Key('chip.new'),
+                  avatar: Icon(PlanRules.canAddCustomCategory(model.plan) ? Icons.add : Icons.lock_outline, size: 18),
+                  label: const Text('New category'),
+                  onPressed: newCategory,
+                ),
               ],
             ),
             const SizedBox(height: 12),

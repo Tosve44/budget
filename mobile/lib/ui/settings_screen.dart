@@ -418,8 +418,16 @@ class CategoriesScreen extends StatelessWidget {
   }
 }
 
-Future<void> showCategoryEditor(BuildContext context, {required String spaceId, required EntryKind kind, Category? category}) {
-  return showModalBottomSheet<void>(
+/// Opens the category editor. Returns the id of the category that was made (or, with
+/// [pickExisting], the one that already had that name), or null when nothing was saved.
+Future<String?> showCategoryEditor(
+  BuildContext context, {
+  required String spaceId,
+  required EntryKind kind,
+  Category? category,
+  bool pickExisting = false,
+}) {
+  return showModalBottomSheet<String>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -427,7 +435,7 @@ Future<void> showCategoryEditor(BuildContext context, {required String spaceId, 
       // Room for the keyboard. iOS can report a keyboard height below zero for a moment while the
       // keyboard closes, so it is never less than 0.
       padding: EdgeInsets.only(bottom: math.max(0.0, MediaQuery.viewInsetsOf(sheet).bottom)),
-      child: CategoryEditor(spaceId: spaceId, kind: kind, category: category),
+      child: CategoryEditor(spaceId: spaceId, kind: kind, category: category, pickExisting: pickExisting),
     ),
   );
 }
@@ -436,7 +444,11 @@ class CategoryEditor extends StatefulWidget {
   final String spaceId;
   final EntryKind kind;
   final Category? category;
-  const CategoryEditor({super.key, required this.spaceId, required this.kind, this.category});
+
+  /// Opened from the add-entry screen: a name that is already there (even hidden) picks that
+  /// category instead of saying the name is taken.
+  final bool pickExisting;
+  const CategoryEditor({super.key, required this.spaceId, required this.kind, this.category, this.pickExisting = false});
   @override
   State<CategoryEditor> createState() => _CategoryEditorState();
 }
@@ -461,6 +473,16 @@ class _CategoryEditorState extends State<CategoryEditor> {
     final model = ModelScope.read(context);
     final n = name.text.trim();
     if (n.isEmpty) return setState(() => problem = 'Enter a name.');
+    if (widget.pickExisting && widget.category == null) {
+      final same = model.store.data.categories
+          .where((c) => c.spaceId == widget.spaceId && c.kind == widget.kind && c.name.trim().toLowerCase() == n.toLowerCase())
+          .firstOrNull;
+      if (same != null) {
+        if (same.archived) model.store.updateCategory(same.id, archived: false);
+        Navigator.pop(context, same.id);
+        return;
+      }
+    }
     if (model.store.categoryNameTaken(n, widget.spaceId, widget.kind, excluding: widget.category?.id)) {
       return setState(() => problem = 'There is already a category called "$n".');
     }
@@ -474,16 +496,17 @@ class _CategoryEditorState extends State<CategoryEditor> {
     final c = widget.category;
     if (c != null) {
       model.store.updateCategory(c.id, name: n, budget: widget.kind == EntryKind.expense ? b : null, icon: icon);
+      Navigator.pop(context, c.id);
     } else {
-      model.store.addCategory(
+      final made = model.store.addCategory(
         spaceId: widget.spaceId,
         name: n,
         kind: widget.kind,
         budget: widget.kind == EntryKind.expense ? b : 0,
         icon: icon,
       );
+      Navigator.pop(context, made.id);
     }
-    Navigator.pop(context);
   }
 
   @override

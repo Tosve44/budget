@@ -380,6 +380,7 @@ function openTxSheet(tx, preset = {}) {
     <div class="seg"><button type="button" data-kind="expense">Expense</button><button type="button" data-kind="income">Income</button></div>
     <input class="amount-input" id="amount" aria-label="Amount" inputmode="decimal" placeholder="0" autocomplete="off" value="${tx ? centsToInput(tx.amount) : ''}">
     <div class="chips" id="chips"></div>
+    <div id="newCatBox" class="new-cat" hidden></div>
     <div class="row2">
       <label class="field"><span>Date</span><input type="date" id="date" value="${defaultDate}"></label>
       <label class="field"><span>Note</span><input id="note" maxlength="${LIMITS.note}" placeholder="Optional" value="${tx ? esc(tx.note) : ''}"></label>
@@ -401,12 +402,62 @@ function openTxSheet(tx, preset = {}) {
     const chips = $('#chips', root);
     const paint = () => {
       root.querySelectorAll('[data-kind]').forEach((b) => b.classList.toggle('on', b.dataset.kind === kind));
-      chips.innerHTML = chipsHtml() || '<p class="empty-note">No categories. Add one in Settings.</p>';
+      chips.innerHTML = `${chipsHtml()}<button type="button" class="chip chip-new" id="newCatChip">+ New category</button>`;
       chips.querySelectorAll('[data-chip]').forEach((b) => b.addEventListener('click', () => { categoryId = b.dataset.chip; paint(); }));
+      $('#newCatChip', chips).addEventListener('click', openNewCat);
       $('#receiptBox', root).hidden = kind !== 'expense';
     };
+    // A new category made right here, without leaving the entry (what was typed stays). It is
+    // picked for this entry straight away.
+    const newCatBox = $('#newCatBox', root);
+    const closeNewCat = () => { newCatBox.hidden = true; newCatBox.innerHTML = ''; };
+    function openNewCat() {
+      let icon = '';
+      newCatBox.innerHTML = `
+        <label class="field"><span>New ${kind === 'income' ? 'income' : 'expense'} category</span>
+          <input id="newCatName" maxlength="${LIMITS.categoryName}" placeholder="e.g. Pets" autocomplete="off"></label>
+        <div class="field"><span id="newIconLabel">Icon</span>
+          <div class="icon-grid" role="radiogroup" aria-labelledby="newIconLabel">
+            <button type="button" role="radio" class="icon-auto" data-newicon="" aria-label="Automatic icon for the name"><span id="newAutoIcon"></span><small>Auto</small></button>
+            ${ICON_CHOICES.map((e) => `<button type="button" role="radio" data-newicon="${e}" aria-label="${e}">${e}</button>`).join('')}
+          </div>
+        </div>
+        <div class="new-cat-actions">
+          <button type="button" class="secondary" id="newCatCancel">Cancel</button>
+          <button type="button" class="primary" id="newCatAdd">Add category</button>
+        </div>`;
+      newCatBox.hidden = false;
+      const name = $('#newCatName', newCatBox);
+      const paintIcons = () => {
+        $('#newAutoIcon', newCatBox).textContent = categoryIcon(name.value);
+        newCatBox.querySelectorAll('[data-newicon]').forEach((b) => {
+          const on = b.dataset.newicon === icon;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-checked', String(on));
+        });
+      };
+      newCatBox.querySelectorAll('[data-newicon]').forEach((b) => b.addEventListener('click', () => { icon = b.dataset.newicon; paintIcons(); }));
+      name.addEventListener('input', paintIcons);
+      paintIcons();
+      const add = () => {
+        const n = name.value.trim();
+        if (!n) { toast('Enter a name'); name.focus(); return; }
+        const same = store.categories(space.id, { includeArchived: true }).find((c) => c.kind === kind && c.name.trim().toLocaleLowerCase() === n.toLocaleLowerCase());
+        // A name that is already there (maybe hidden) is used instead of making a second one.
+        const c = same || store.addCategory({ spaceId: space.id, name: n, kind, icon });
+        if (same?.archived) store.updateCategory(same.id, { archived: false });
+        categoryId = c.id;
+        closeNewCat();
+        paint();
+        toast(same ? `"${same.name}" picked` : `Category "${c.name}" added`);
+      };
+      name.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+      $('#newCatAdd', newCatBox).addEventListener('click', add);
+      $('#newCatCancel', newCatBox).addEventListener('click', closeNewCat);
+      name.focus();
+    }
     root.querySelectorAll('[data-kind]').forEach((b) => b.addEventListener('click', () => {
-      if (kind !== b.dataset.kind) { kind = b.dataset.kind; categoryId = null; paint(); }
+      if (kind !== b.dataset.kind) { kind = b.dataset.kind; categoryId = null; closeNewCat(); paint(); }
     }));
     paint();
 

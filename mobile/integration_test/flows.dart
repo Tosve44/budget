@@ -325,6 +325,51 @@ final flows = <String, Future<void> Function(WidgetTester)>{
     await reveal(tester, find.byKey(const Key('chipIcon.Pets')));
     expect(tester.widget<Text>(find.byKey(const Key('chipIcon.Pets')).first).data, '🏷️');
   },
+  'new category right from the add screen: what was typed stays, and it is picked': (tester) async {
+    final model = await pumpApp(tester);
+    await tapKey(tester, 'addExpense');
+    await typeInto(tester, 'amountField', '12');
+    await typeInto(tester, 'noteField', 'vet');
+    await tapKey(tester, 'chip.new');
+    await typeInto(tester, 'categoryName', 'Dog');
+    await tapKey(tester, 'iconField');
+    await tapKey(tester, 'iconChoice.🐶');
+    await tapKey(tester, 'saveCategory');
+    final dog = model.store.data.categories.where((c) => c.name == 'Dog').single;
+    expect(dog.kind, EntryKind.expense);
+    expect(dog.icon, '🐶');
+    await reveal(tester, find.byKey(const Key('chip.Dog')));
+    expect(tester.widget<ChoiceChip>(find.byKey(const Key('chip.Dog'))).selected, isTrue, reason: 'picked for this entry');
+    await tapKey(tester, 'saveEntry');
+    final t = model.store.data.transactions.single;
+    expect((t.amount, t.categoryId, t.note), (1200, dog.id, 'vet'));
+    // The same name again (any case) picks the one that is there, even a hidden one.
+    model.store.updateCategory(dog.id, archived: true);
+    await tapKey(tester, 'addExpense');
+    await tapKey(tester, 'chip.new');
+    await typeInto(tester, 'categoryName', ' dog ');
+    await tapKey(tester, 'saveCategory');
+    expect(model.store.data.categories.where((c) => c.name.toLowerCase() == 'dog').length, 1);
+    expect(model.store.category(dog.id)!.archived, isFalse, reason: 'shown again');
+    expect(tester.widget<ChoiceChip>(find.byKey(const Key('chip.Dog'))).selected, isTrue);
+    // Cancel keeps the form as it was, with nothing picked.
+    await tapKey(tester, 'chip.new');
+    await tapKey(tester, 'cancelCategory');
+    expect(find.byKey(const Key('editorList')), findsOneWidget);
+  },
+  'free version: the new category chip leads to Premium': (tester) async {
+    final model = await pumpApp(tester, plan: Plan.free, purchases: FakePurchases());
+    await tapKey(tester, 'addExpense');
+    await tapKey(tester, 'chip.new');
+    await waitFor(tester, find.byKey(const Key('premiumScreen')), timeout: const Duration(seconds: 5));
+    await reveal(tester, find.byKey(const Key('premiumBecause')));
+    expect(find.byKey(const Key('premiumBecause')), findsOneWidget);
+    expect(find.byKey(const Key('categoryName')), findsNothing);
+    final before = model.store.data.categories.length;
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(model.store.data.categories.length, before);
+  },
   'free version: House, Prices and receipt photos lead to Premium; buying unlocks them': (tester) async {
     final store = FakePurchases();
     final model = await pumpApp(tester, demo: true, plan: Plan.free, purchases: store);

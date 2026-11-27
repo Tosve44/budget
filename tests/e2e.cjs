@@ -162,6 +162,50 @@ const money = (s) => Number(String(s).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{
       await p.click('[data-close]');
     });
 
+    await check(`${D} new category right from the add screen: what was typed stays, and it is picked`, async () => {
+      await tab('personal');
+      await p.click('#addBtn');
+      await p.fill('#amount', '12,50');
+      await p.fill('#note', 'Vet');
+      await p.click('#newCatChip');
+      await p.fill('#newCatName', 'Dog');
+      await p.locator('[data-newicon="🐶"]').click();
+      await p.click('#newCatAdd');
+      assert(await p.locator('#newCatBox').isHidden(), 'the small form closes');
+      assert(await p.locator('[data-chip].on', { hasText: 'Dog' }).count() === 1, 'the new category is picked');
+      assert((await p.inputValue('#amount')) === '12,50' && (await p.inputValue('#note')) === 'Vet', 'amount and note kept');
+      // The same name again (any case) picks the one that is there instead of making a second.
+      await p.click('#newCatChip');
+      await p.fill('#newCatName', 'groceries');
+      await p.press('#newCatName', 'Enter');
+      assert(await p.locator('[data-chip].on', { hasText: 'Groceries' }).count() === 1, 'existing category picked');
+      assert(await p.locator('[data-chip]', { hasText: 'Groceries' }).count() === 1, 'no second Groceries');
+      await p.locator('[data-chip]', { hasText: 'Dog' }).click();
+      // An empty name is not added.
+      await p.click('#newCatChip');
+      await p.click('#newCatAdd');
+      assert(await p.locator('#newCatBox').isVisible(), 'empty name: form stays open');
+      await p.click('#newCatCancel');
+      await noOverflow('add sheet with a new category');
+      await p.click('#saveTx2');
+      await p.waitForFunction(() => !document.querySelector('#sheet').open);
+      assert((await p.textContent('main')).includes('Dog'), 'entry saved under Dog');
+      await tab('settings');
+      assert(await p.locator('.set-list li', { hasText: 'Dog' }).count() === 1, 'Dog is in Settings too');
+      await tab('personal');
+      // Income has its own categories.
+      await p.click('#addBtn');
+      await p.click('.seg [data-kind=income]');
+      await p.click('#newCatChip');
+      assert((await p.textContent('#newCatBox')).includes('New income category'));
+      await p.fill('#newCatName', 'Side job');
+      await p.click('#newCatAdd');
+      assert(await p.locator('[data-chip].on', { hasText: 'Side job' }).count() === 1, 'income category picked');
+      await p.click('.seg [data-kind=expense]');
+      assert(await p.locator('[data-chip]', { hasText: 'Side job' }).count() === 0, 'income category not among expenses');
+      await p.click('[data-close]');
+    });
+
     await check(`${D} receipt photo: items read, prices compared, Prices tab history`, async () => {
       await tab('personal');
       // first shop, typed by hand, a month earlier
