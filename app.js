@@ -353,12 +353,56 @@ function renderSettings() {
 
 // ---------- sheets ----------
 function openSheet(html, bind) {
-  sheet.innerHTML = `<div class="sheet-inner">${html}</div>`;
+  sheet.style.transform = ''; sheet.style.transition = '';
+  sheet.innerHTML = `<div class="grabber" aria-hidden="true"></div><div class="sheet-inner">${html}</div>`;
   bind(sheet);
   sheet.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => sheet.close()));
   if (!sheet.open) sheet.showModal();
 }
 sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.close(); });
+
+// Swipe down to close, like other iPhone sheets. The drag starts only when the sheet is
+// scrolled to the top and the finger moves mostly downward, so scrolling the sheet and
+// swiping the category chips sideways still work. A short drag springs back.
+(() => {
+  let startX = 0, startY = null, dy = 0, dragging = false, recent = [];
+  sheet.addEventListener('touchstart', (e) => {
+    startY = (e.touches.length === 1 && sheet.scrollTop <= 0) ? e.touches[0].clientY : null;
+    if (startY === null) return;
+    startX = e.touches[0].clientX; dy = 0; dragging = false; recent = [[Date.now(), 0]];
+  }, { passive: true });
+  sheet.addEventListener('touchmove', (e) => {
+    if (startY === null) return;
+    const t = e.touches[0];
+    dy = t.clientY - startY;
+    recent.push([Date.now(), dy]); while (recent.length > 2 && Date.now() - recent[0][0] > 120) recent.shift();
+    if (!dragging) {
+      const dx = Math.abs(t.clientX - startX);
+      if (dy < -4 || dx > 10 && dx > dy) { startY = null; return; }
+      if (dy > 10 && dy > dx) { dragging = true; sheet.style.transition = 'none'; }
+    }
+    if (dragging) { e.preventDefault(); sheet.style.transform = `translateY(${Math.max(0, dy)}px)`; }
+  }, { passive: false });
+  const end = () => {
+    if (startY === null) return;
+    startY = null;
+    if (!dragging) return;
+    dragging = false;
+    // Speed over the last moment of the swipe, in pixels per millisecond.
+    const [ft, fy] = recent[0];
+    const fast = dy > 40 && (dy - fy) / Math.max(1, Date.now() - ft) > 0.5;
+    sheet.style.transition = 'transform .2s ease';
+    if (dy > Math.min(120, sheet.offsetHeight * 0.25) || fast) {
+      sheet.style.transform = `translateY(${sheet.offsetHeight}px)`;
+      setTimeout(() => sheet.close(), 200);
+    } else {
+      sheet.style.transform = '';
+    }
+  };
+  sheet.addEventListener('touchend', end);
+  sheet.addEventListener('touchcancel', end);
+  sheet.addEventListener('close', () => { sheet.style.transform = ''; sheet.style.transition = ''; });
+})();
 
 function openTxSheet(tx, preset = {}) {
   const space = tx ? store.space(tx.spaceId) : currentSpace();
@@ -796,6 +840,20 @@ startCloud(store).then(async (s) => {
   } catch (e) { console.warn('sync', e); }
 }).catch((e) => console.warn('sync not started', e));
 
+// Updates: a home-screen app on iPhone is usually resumed, not restarted, so check for a new
+// version whenever the app comes back to the screen, and reload once it is installed. Never
+// reload while the add/edit screen is open, so nothing typed is lost; wait until it closes.
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloadWanted = false;
+  const reloadIfIdle = () => { if (reloadWanted && !document.querySelector('#sheet')?.open) { reloadWanted = false; location.reload(); } };
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) { reloadWanted = true; reloadIfIdle(); } });
+  document.querySelector('#sheet')?.addEventListener('close', () => setTimeout(reloadIfIdle, 300));
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      reg.update().catch(() => {});
+      reloadIfIdle();
+    });
+  }).catch(() => {});
 }
