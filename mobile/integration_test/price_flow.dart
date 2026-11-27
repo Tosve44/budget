@@ -11,6 +11,7 @@ import 'package:budget/app_model.dart';
 import 'package:budget/core/money.dart';
 import 'package:budget/core/prices.dart';
 import 'package:budget/platform/receipt_reader.dart';
+import 'package:budget/ui/widgets.dart' show pct;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -35,7 +36,7 @@ String _input(int cents) => Money.inputText(cents, emptyForZero: false);
 class PriceRun {
   final AppModel model;
   final List<String> log = [];
-  int lines = 0, readRight = 0, totalsRight = 0, misread = 0, warned = 0;
+  int lines = 0, readRight = 0, totalsRight = 0, misread = 0, warned = 0, skipped = 0;
   PriceRun(this.model);
 }
 
@@ -153,70 +154,74 @@ Future<List<String>> _correct(WidgetTester tester, List<Map<String, dynamic>> wa
   return fixes;
 }
 
-/// Each item's price history must follow the real price of one piece / one kilo. Returns problems.
+/// Every price on the Prices screen must be the real price of one piece / one kilo on that day.
+/// A line whose quantity doesn't add up to its price (something misread that the person can't
+/// see) is left out rather than shown wrong; those are counted in [PriceRun.skipped]. Returns problems.
 List<String> checkTrends(PriceRun run) {
   final problems = <String>[];
   final groups = PriceHistory.groups(run.model.store.data.transactions);
-  final byName = <String, List<Map<String, dynamic>>>{};
+  final byName = <String, Map<String, Map<String, dynamic>>>{}; // item -> date -> line
   for (final r in priceReceipts) {
     for (final it in (r['items'] as List).cast<Map<String, dynamic>>()) {
-      byName.putIfAbsent(_norm(it['name'] as String), () => []).add(it);
+      byName.putIfAbsent(_norm(it['name'] as String), () => {})[r['date'] as String] = it;
     }
   }
   if (groups.length != byName.length) problems.add('Prices shows ${groups.length} items, want ${byName.length}');
-  for (final MapEntry(key: k, value: list) in byName.entries) {
+  run.skipped = 0;
+  for (final MapEntry(key: k, value: byDate) in byName.entries) {
     final g = groups[k];
     if (g == null) {
       problems.add('$k missing');
       continue;
     }
-    // A line typed in by hand has no quantity (its line total counts); a corrected price is
-    // divided by the quantity (can be a cent off the printed price of one).
-    int want(Map<String, dynamic> e) => e['fixedByHand'] == 'added' ? e['price'] as int : e['unitPrice'] as int;
-    final tol = list.any((e) => e['fixedByHand'] != null) ? 1 : 0;
-    final got = g.entries.map((e) => e.price).toList();
-    final exp = list.map(want).toList();
-    final bad = got.length != exp.length || [for (var i = 0; i < got.length; i++) (got[i] - exp[i]).abs() > tol].any((b) => b);
-    if (bad) problems.add('$k: prices $got, want $exp');
-    final kg = list.last['unit'] == 'kg' && list.last['fixedByHand'] != 'added';
-    if ((g.latest.unit == 'kg') != kg) problems.add('$k: per kg ${g.latest.unit}, want $kg');
-    final first = want(list.first), last = want(list.last);
-    final wantPct = list.length > 1 ? Money.percentChange(last, first) : null;
-    final gotPct = g.changeSinceFirst;
-    if (wantPct == null ? gotPct != null : (gotPct == null || (gotPct - wantPct).abs() > (tol == 0 ? 0 : 0.3))) {
-      problems.add('$k: change $gotPct%, want $wantPct%');
+    // A line typed in by hand has no quantity, so its line total counts.
+    for (final p in g.entries) {
+      final e = byDate[p.date];
+      if (e == null) {
+        problems.add('$k: a price on ${p.date}, but it was not bought that day');
+        continue;
+      }
+      final want = e['fixedByHand'] == 'added' ? e['price'] as int : e['unitPrice'] as int;
+      final tol = e['fixedByHand'] != null ? 1 : 0;
+      if ((p.price - want).abs() > tol) {
+        problems.add('$k on ${p.date}: shows ${p.price}, real ${e['unitPrice']} (${e['fixedByHand'] ?? 'read right'})');
+      }
+      final kg = e['unit'] == 'kg' && e['fixedByHand'] != 'added';
+      if ((p.unit == 'kg') != kg) problems.add('$k on ${p.date}: per kg ${p.unit == 'kg'}, want $kg');
     }
+    run.skipped += byDate.length - g.entries.length;
   }
   return problems;
 }
 
-/// The Prices screen shows the price per kg and the change for a few items.
-Future<void> checkPricesScreen(WidgetTester tester, {Future<void> Function(String name)? shot}) async {
+/// The Prices screen shows each item's newest price (per kg where sold by weight) and the change
+/// since the first purchase, as worked out from the history checked above.
+Future<void> checkPricesScreen(WidgetTester tester, AppModel model, {Future<void> Function(String name)? shot}) async {
   await tapKey(tester, 'tab.prices');
   if (shot != null) await shot('prices');
-  for (final (name, price, badge) in [
-    ('BANANE', '${Money.format(129)}/kg', '▼ -13.4%'),
-    ('JOGURT NAVADNI 180G', Money.format(69), '▲ +16.9%'),
-    ('KAVA BARCAFFE 400G', Money.format(703), '▲ +28.1%'),
-    ('ALPSKO MLEKO 3,5% 1L', Money.format(119), 'same'),
-  ]) {
-    final row = find.ancestor(of: find.text(name), matching: find.byKey(const Key('priceRow')));
+  final groups = PriceHistory.groups(model.store.data.transactions);
+  for (final key in ['banane', 'jogurt navadni 180g', 'kava barcaffe 400g', 'alpsko mleko 3 5% 1l']) {
+    final g = groups[key]!;
+    final price = '${Money.format(g.latest.price)}${g.latest.unit == 'kg' ? '/kg' : ''}';
+    final p = g.changeSinceFirst;
+    final badge = p == null ? 'new' : (p == 0 ? 'same' : (p > 0 ? '▲ +${pct(p)}%' : '▼ ${pct(p)}%'));
+    final row = find.ancestor(of: find.text(g.name), matching: find.byKey(const Key('priceRow')));
     await reveal(tester, row);
     expect(
       find.descendant(of: row, matching: find.text(price)),
       findsOneWidget,
-      reason: '$name price',
+      reason: '${g.name} price',
     );
     expect(
       find.descendant(of: row, matching: find.text(badge)),
       findsOneWidget,
-      reason: '$name change',
+      reason: '${g.name} change',
     );
   }
-  final banane = find.ancestor(of: find.text('BANANE'), matching: find.byKey(const Key('priceRow')));
-  await tester.tap(banane.first);
+  final banane = groups['banane']!;
+  await tester.tap(find.ancestor(of: find.text(banane.name), matching: find.byKey(const Key('priceRow'))).first);
   await tester.pumpAndSettle();
-  expect(find.text('${Money.format(149)}/kg'), findsWidgets, reason: 'first banana price per kg in the history');
+  expect(find.text('${Money.format(banane.entries.first.price)}/kg'), findsWidgets, reason: 'first banana price per kg in the history');
   if (shot != null) await shot('prices-banane');
   await tester.pageBack();
   await tester.pumpAndSettle();

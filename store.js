@@ -221,7 +221,7 @@ export class Store {
     for (const t of this.data.transactions) {
       for (const it of t.items || []) {
         const key = normalizeItem(it.name);
-        if (!key) continue;
+        if (!key || pricePerUnit(it) === null) continue;
         if (!map.has(key)) map.set(key, { key, name: it.name, entries: [] });
         // price: of one piece or one kilo (see pricePerUnit), so buying two, or a bigger bunch of
         // bananas, does not look like a price rise.
@@ -239,7 +239,7 @@ export class Store {
     for (const t of this.data.transactions) {
       if (t.id === excludeTxId || t.date > beforeDate) continue;
       for (const it of t.items || []) {
-        if (normalizeItem(it.name) === key && (!best || t.date >= best.date)) best = { date: t.date, price: pricePerUnit(it), ...(it.unit ? { unit: it.unit } : {}) };
+        if (normalizeItem(it.name) === key && pricePerUnit(it) !== null && (!best || t.date >= best.date)) best = { date: t.date, price: pricePerUnit(it), ...(it.unit ? { unit: it.unit } : {}) };
       }
     }
     return best;
@@ -288,7 +288,8 @@ function cleanItems(items) {
   return items.slice(0, LIMITS.items).map((it) => cleanItem({ ...it, name: clip(it.name, LIMITS.itemName) }));
 }
 
-// Keep a receipt line's quantity only when it makes sense (a bad one would spoil the price history).
+// Keep a receipt line's quantity only when it makes sense. The printed price of one is kept even
+// when it doesn't add up (see pricePerUnit).
 export function cleanItem(it) {
   const out = { ...it };
   delete out.qty; delete out.unit; delete out.unitPrice;
@@ -297,16 +298,21 @@ export function cleanItem(it) {
     out.qty = Math.round(qty * 1000) / 1000;
     if (it.unit === 'kg') out.unit = 'kg';
     const up = Number(it.unitPrice);
-    if (Number.isInteger(up) && up > 0 && Math.abs(Math.round(out.qty * up) - it.price) <= 1) out.unitPrice = up;
+    if (Number.isInteger(up) && up > 0 && up <= LIMITS.amount) out.unitPrice = up;
   }
   return out;
 }
 
 // Price of one piece, or of one kilo, for comparing prices between shopping trips.
 // "2 x 0,59 = 1,18" is 0,59; "0,856 kg x 1,49 = 1,28" is 1,49 per kilo.
+// null when the quantity line doesn't add up to the line total (quantity × price of one ≠ total):
+// one of the three numbers was misread, and nobody can see or fix the quantity, so such a line is
+// left out of the price history rather than showing a made-up price. Fixing the total so it adds
+// up again brings it back.
 export function pricePerUnit(it) {
   if (!(it.qty > 0)) return it.price;
-  return it.unitPrice > 0 ? it.unitPrice : Math.round(it.price / it.qty);
+  if (!(it.unitPrice > 0)) return Math.round(it.price / it.qty);
+  return Math.abs(Math.round(it.qty * it.unitPrice) - it.price) <= 1 ? it.unitPrice : null;
 }
 
 export function toCents(input) {

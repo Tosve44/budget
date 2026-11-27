@@ -404,11 +404,16 @@ class _EntryEditorState extends State<EntryEditor> {
     final it = line.item();
     final q = it?.qty;
     // "2 × 0,59 €" or "0,856 kg × 1,49 €/kg": what the comparison is about.
-    final qtyText = it == null || q == null
-        ? ''
-        : '${it.unit == 'kg' ? '${q.toString().replaceAll('.', ',')} kg ×' : '${q.round()} ×'} ${money0(it.perUnit)}${it.unit == 'kg' ? '/kg' : ''} · ';
+    final amount = it == null || q == null ? '' : (it.unit == 'kg' ? '${q.toString().replaceAll('.', ',')} kg ×' : '${q.round()} ×');
+    final perKg = it?.unit == 'kg' ? '/kg' : '';
+    final qtyText = it == null || q == null || it.perUnit == null ? '' : '$amount ${money0(it.perUnit!)}$perKg · ';
     final (String text0, Color color) = switch (cmp?.kind) {
       null => ('', pal.muted),
+      // Quantity × price of one is not the line total: something is misread; say so it can be fixed.
+      'misread' => (
+        '⚠️ $amount ${money0(it!.unitPrice ?? 0)}$perKg is not ${money0(it.price)}. Check this price; until it adds up, this line is left out of the price history.',
+        pal.over,
+      ),
       'new' => ('First time', pal.muted),
       'same' => ('Same as ${shortDay(cmp!.date)} (${money(cmp.before)})', pal.muted),
       'up' => ('▲ +${pct(cmp!.percent)}% since ${shortDay(cmp.date)} (was ${money(cmp.before)})', pal.over),

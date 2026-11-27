@@ -4,6 +4,7 @@
 //   PRICE_SHOTS=1 flutter test --update-goldens test/price_history_test.dart
 import 'dart:io';
 
+import 'package:budget/core/prices.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -49,6 +50,14 @@ void main() {
       reason: 'dates picked',
     );
     expect(checkTrends(run), isEmpty);
-    await checkPricesScreen(tester, shot: shot);
+    expect(run.skipped, 0, reason: 'nothing misread, so every purchase is on Prices');
+    // The real changes since the first purchase (per piece / per kg).
+    final groups = PriceHistory.groups(run.model.store.data.transactions);
+    expect(groups['banane']!.changeSinceFirst, -13.4);
+    expect(groups['jogurt navadni 180g']!.changeSinceFirst, 16.9);
+    expect(groups['paradiznik']!.changeSinceFirst, 75.9);
+    expect(groups['piscancje prsi']!.changeSinceFirst, 14.3);
+    expect(groups['alpsko mleko 3 5% 1l']!.changeSinceFirst, 0);
+    await checkPricesScreen(tester, run.model, shot: shot);
   });
 }

@@ -300,6 +300,7 @@ function addQuantity(item, amount) {
   item.qty = amount.qty;
   if (amount.unit) item.unit = amount.unit;
   // The printed price of one (or of a kilo) is exact; dividing the line total is off by a cent
-  // sometimes. Used only when the numbers agree (otherwise one of them is misread).
-  if (amount.unitPrice && Math.abs(Math.round(amount.qty * amount.unitPrice) - item.price) <= 1) item.unitPrice = amount.unitPrice;
+  // sometimes. Kept even when the numbers disagree: then one of them is misread, and the line is
+  // left out of the price history until the total is fixed (see pricePerUnit in store.js).
+  if (amount.unitPrice) item.unitPrice = amount.unitPrice;
 }

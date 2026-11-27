@@ -40,7 +40,7 @@ class DraftProblem implements Exception {
 
 /// How a receipt line compares with the last time the same item was bought.
 class Comparison {
-  /// 'new', 'same', 'up' or 'down'.
+  /// 'new', 'same', 'up' or 'down'; 'misread' when the quantity line doesn't add up to the price.
   final String kind;
   final double percent;
   final int before;
@@ -173,6 +173,7 @@ class EntryDraft {
     final it = line.item();
     if (it == null || line.name.trim().isEmpty) return null;
     final price = it.perUnit;
+    if (price == null) return const Comparison('misread');
     final prev = store.previousPrice(line.name, date, excluding: existingId);
     if (prev == null) return Comparison('new', perKg: it.unit == 'kg');
     final pct = Money.percentChange(price, prev.price);

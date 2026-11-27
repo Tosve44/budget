@@ -64,11 +64,10 @@ class PriceHistory {
     for (final t in transactions) {
       for (final it in t.items ?? const <ReceiptItem>[]) {
         final key = normalize(it.name);
-        if (key.isEmpty) continue;
+        final each = it.perUnit;
+        if (key.isEmpty || each == null) continue;
         map.putIfAbsent(key, () => PriceGroup(key, it.name, []));
-        map[key]!.entries.add(
-          PricePoint(date: t.date, price: it.perUnit, unit: it.unit, txId: t.id, spaceId: t.spaceId, createdAt: t.createdAt),
-        );
+        map[key]!.entries.add(PricePoint(date: t.date, price: each, unit: it.unit, txId: t.id, spaceId: t.spaceId, createdAt: t.createdAt));
       }
     }
     for (final g in map.values) {
@@ -92,8 +91,9 @@ class PriceHistory {
     for (final t in transactions) {
       if (t.id == excluding || t.date.compareTo(before) > 0) continue;
       for (final it in t.items ?? const <ReceiptItem>[]) {
-        if (normalize(it.name) == key && (best == null || t.date.compareTo(best.date) >= 0)) {
-          best = PricePoint(date: t.date, price: it.perUnit, unit: it.unit, txId: t.id, spaceId: t.spaceId, createdAt: t.createdAt);
+        final each = it.perUnit;
+        if (normalize(it.name) == key && each != null && (best == null || t.date.compareTo(best.date) >= 0)) {
+          best = PricePoint(date: t.date, price: each, unit: it.unit, txId: t.id, spaceId: t.spaceId, createdAt: t.createdAt);
         }
       }
     }

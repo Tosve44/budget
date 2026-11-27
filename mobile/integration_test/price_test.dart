@@ -42,10 +42,13 @@ void main() {
         print('PRICES PROBLEM $p');
       }
       expect(problems, isEmpty, reason: problems.join('\n'));
+      // ignore: avoid_print
+      print('PRICES ${run.skipped} purchases left out of Prices because their quantity line did not add up');
+      expect(run.skipped, lessThanOrEqualTo(run.lines ~/ 20), reason: 'too many purchases left out');
       expect(run.readRight / run.lines, greaterThanOrEqualTo(0.8), reason: 'the phone read too few lines right');
       // (A receipt whose total is misread the same way as an item can't be caught.)
       expect(run.warned, greaterThanOrEqualTo((run.misread * 0.7).floor()), reason: 'misread prices should show the warning');
-      await checkPricesScreen(tester);
+      await checkPricesScreen(tester, run.model);
     }),
     timeout: const Timeout(Duration(minutes: 40)),
   );

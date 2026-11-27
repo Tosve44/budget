@@ -261,10 +261,20 @@ SKUPAJ                     8,84`);
   assert.deepEqual(items.map(pricePerUnit), [59, 147, 1007]);
 });
 
-test('a misread quantity line keeps the quantity but not a price of one that does not add up', () => {
+test('a quantity line that does not add up is left out of the price history until it is fixed', () => {
   const [it] = parseReceipt('BANANE\n 0,856 kg x 7,49      1,28 C');
-  assert.deepEqual(it, { name: 'BANANE', price: 128, qty: 0.856, unit: 'kg' });
-  assert.equal(pricePerUnit(it), 150); // 1,28 / 0,856
+  assert.deepEqual(it, { name: 'BANANE', price: 128, qty: 0.856, unit: 'kg', unitPrice: 749 });
+  assert.equal(pricePerUnit(it), null); // 0,856 × 7,49 is not 1,28: something is misread
+  const s = freshStore();
+  const P = 'sp_personal_tosve', G = catId(s, P, 'Groceries');
+  s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: 1, date: '2026-06-06', items: [it, { name: 'Kruh', price: 149 }] });
+  assert.equal(s.itemHistory().get('banane'), undefined);
+  assert.equal(s.previousPrice('BANANE', '2026-12-01'), null);
+  // The total fixed by hand so it adds up again (6,41): back in the history, per kilo.
+  s.updateTransaction(s.data.transactions[0].id, { items: [{ ...it, price: 641 }] });
+  assert.deepEqual(s.itemHistory().get('banane').entries.map((e) => e.price), [749]);
+  // A quantity read from the wrong line (butter with the apples' weight) stays out too.
+  assert.equal(pricePerUnit({ name: 'MASLO', price: 294, qty: 0.665, unit: 'kg', unitPrice: 179 }), null);
 });
 
 test('a small l read as 1 in volumes is put back', () => {
@@ -290,9 +300,10 @@ test('bad quantities are dropped instead of spoiling the price history', () => {
   assert.deepEqual(cleanItem({ name: 'a', price: 100, qty: 'x', unit: 'kg' }), { name: 'a', price: 100 });
   assert.deepEqual(cleanItem({ name: 'a', price: 100, qty: 1, unit: 'kg' }), { name: 'a', price: 100 });
   assert.deepEqual(cleanItem({ name: 'a', price: 100, qty: 2, unit: 'lb', unitPrice: 50 }), { name: 'a', price: 100, qty: 2, unitPrice: 50 });
-  // A price of one that doesn't add up (the total was corrected by hand) is worked out again.
-  assert.deepEqual(cleanItem({ name: 'a', price: 120, qty: 2, unitPrice: 50 }), { name: 'a', price: 120, qty: 2 });
-  assert.equal(pricePerUnit({ price: 120, qty: 2 }), 60);
+  // A price of one that doesn't add up is kept (the line is left out of the history, see above).
+  assert.deepEqual(cleanItem({ name: 'a', price: 120, qty: 2, unitPrice: 50 }), { name: 'a', price: 120, qty: 2, unitPrice: 50 });
+  assert.deepEqual(cleanItem({ name: 'a', price: 120, qty: 2, unitPrice: -5 }), { name: 'a', price: 120, qty: 2 });
+  assert.equal(pricePerUnit({ price: 120, qty: 2 }), 60); // no printed price of one: worked out
 });
 
 test('quantities survive the trip through the cloud', () => {

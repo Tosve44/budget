@@ -183,7 +183,8 @@ class ReceiptItem {
     final q = qty?.toDouble();
     if (q == null || !q.isFinite || q <= 0 || q > 999 || q == 1) return ReceiptItem._(name, price, null, null, null);
     final rq = (q * 1000).round() / 1000;
-    final up = unitPrice != null && unitPrice > 0 && ((rq * unitPrice).round() - price).abs() <= 1 ? unitPrice : null;
+    // Kept even when it doesn't add up to [price] (then the line is left out of the price history).
+    final up = unitPrice != null && unitPrice > 0 && unitPrice <= 1000000000 ? unitPrice : null;
     return ReceiptItem._(name, price, rq, unit == 'kg' ? 'kg' : null, up);
   }
 
@@ -204,19 +205,20 @@ class ReceiptItem {
 
   /// Price of one piece, or of one kilo, for comparing prices between shopping trips:
   /// "2 x 0,59 = 1,18" is 0,59, "0,856 kg x 1,49 = 1,28" is 1,49.
-  int get perUnit {
+  /// null when quantity × price of one is not the line total: one of the numbers was misread, and
+  /// the quantity can't be seen or fixed, so the line is left out of the price history instead of
+  /// showing a made-up price. Fixing the total so it adds up brings it back. (pricePerUnit in
+  /// the web app's store.js.)
+  int? get perUnit {
     final q = qty;
     if (q == null) return price;
-    return unitPrice ?? (price / q).round();
+    final up = unitPrice;
+    if (up == null) return (price / q).round();
+    return ((q * up).round() - price).abs() <= 1 ? up : null;
   }
 
-  ReceiptItem copyWith({String? name, int? price}) => ReceiptItem(
-    name: name ?? this.name,
-    price: price ?? this.price,
-    qty: qty,
-    unit: unit,
-    unitPrice: price == null || price == this.price ? unitPrice : null,
-  );
+  ReceiptItem copyWith({String? name, int? price}) =>
+      ReceiptItem(name: name ?? this.name, price: price ?? this.price, qty: qty, unit: unit, unitPrice: unitPrice);
 
   @override
   bool operator ==(Object other) =>

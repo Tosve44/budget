@@ -226,7 +226,7 @@ button.stat:active { background: var(--accent-soft); }
 .item-row:first-child { border-top: 0; }
 .item-row input { min-width: 0; border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 8px 10px; font-size: max(16px, 0.941rem); }
 .item-price { text-align: right; font-variant-numeric: tabular-nums; }
-.item-cmp { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; font-size: 0.765rem; color: var(--muted); }
+.item-cmp { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 0.765rem; color: var(--muted); }
 .item-cmp:empty { display: none; }
 .item-cmp .item-qty { color: var(--text); font-weight: 600; }
 #ocrStatus.warn { color: var(--text); font-weight: 600; }

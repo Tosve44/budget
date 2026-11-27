@@ -414,8 +414,14 @@ function openTxSheet(tx, preset = {}) {
       if (!it.name || !it.price) return '';
       const prev = store.previousPrice(it.name, $('#date', root).value || todayKey(), tx?.id);
       const per = it.unit === 'kg' ? '/kg' : '';
-      const qty = it.qty ? `<small class="item-qty">${it.unit === 'kg' ? `${String(it.qty).replace('.', ',')} kg` : `${it.qty} ×`} ${money(pricePerUnit(it))}${per}</small>` : '';
-      return `${qty}${changeBadge(prev ? pctChange(pricePerUnit(it), prev.price) : null)}${prev ? `<small>was ${money(prev.price)}${prev.unit === 'kg' ? '/kg' : ''} on ${esc(dayLabel(prev.date))}</small>` : ''}`;
+      const each = pricePerUnit(it);
+      const amount = it.unit === 'kg' ? `${String(it.qty).replace('.', ',')} kg ×` : `${it.qty} ×`;
+      if (it.qty && each === null) {
+        // Quantity × price of one ≠ line total: something is misread. Show it so it can be fixed.
+        return `<small class="item-qty">⚠️ ${amount} ${money(it.unitPrice)}${per} is not ${money(it.price)}. Check this price; until it adds up, this line is left out of the price history.</small>`;
+      }
+      const qty = it.qty ? `<small class="item-qty">${amount} ${money(each)}${per}</small>` : '';
+      return `${qty}${changeBadge(prev ? pctChange(each, prev.price) : null)}${prev ? `<small>was ${money(prev.price)}${prev.unit === 'kg' ? '/kg' : ''} on ${esc(dayLabel(prev.date))}</small>` : ''}`;
     };
     const itemsTotal = () => items.reduce((s, it) => s + (it.price || 0), 0);
     const paintItems = () => {
@@ -439,7 +445,6 @@ function openTxSheet(tx, preset = {}) {
           else {
             const c = toCents(inp.value);
             items[i].price = Number.isFinite(c) ? c : 0;
-            delete items[i].unitPrice; // the printed price of one no longer matches: work it out from the total
           }
           // Update the comparison while typing, so nothing jumps around when the field loses focus.
           $(`[data-cmp="${i}"]`, itemsWrap).innerHTML = cmpHtml(items[i]);
