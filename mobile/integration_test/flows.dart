@@ -25,17 +25,26 @@ Future<AppModel> pumpApp(
 
 String eur(int cents) => Money.format(cents);
 
+/// The main vertical list of what is on top (a sheet or dialog covers the screen behind it,
+/// whose lists are still there).
+Finder topList() {
+  final vertical = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down);
+  final onTop = find.byElementPredicate(
+    (e) => e.widget is Scrollable && (e.widget as Scrollable).axisDirection == AxisDirection.down && (ModalRoute.of(e)?.isCurrent ?? true),
+  );
+  return onTop.evaluate().isNotEmpty ? onTop.first : vertical.first;
+}
+
 /// Scrolls the screen until [f] is built (long lists build only what is on screen).
 Future<void> reveal(WidgetTester tester, Finder f) async {
   if (f.evaluate().isEmpty) {
     // Start from the top, then scroll down until it shows up.
-    final list = find.byType(Scrollable).first;
-    final position = tester.state<ScrollableState>(list).position;
+    final position = tester.state<ScrollableState>(topList()).position;
     if (position.pixels != 0) position.jumpTo(0);
     await tester.pumpAndSettle();
   }
   for (var i = 0; i < 80 && f.evaluate().isEmpty; i++) {
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, -150));
+    await tester.drag(topList(), const Offset(0, -150));
     await tester.pumpAndSettle();
   }
   await tester.ensureVisible(f.first);
@@ -392,6 +401,32 @@ final flows = <String, Future<void> Function(WidgetTester)>{
     expect(model.plan, Plan.free);
     await reveal(tester, find.byKey(const Key('premiumMessage')));
     expect((tester.widget(find.byKey(const Key('premiumMessage'))) as Text).data, contains('cannot be reached'));
+  },
+  'the add screen closes with a swipe down; a short swipe keeps what was typed': (tester) async {
+    final model = await pumpApp(tester, demo: true);
+    final before = model.store.data.transactions.length;
+    await tapKey(tester, 'addExpense');
+    await typeInto(tester, 'amountField', '7,40');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    // The top bar of the sheet (with the drag handle above it).
+    final handle = find.byType(AppBar).last;
+    // A short, slow pull springs back.
+    await tester.drag(handle, const Offset(0, 60));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('editorList')), findsOneWidget);
+    await reveal(tester, find.byKey(const Key('amountField')));
+    expect(tester.widget<TextField>(find.byKey(const Key('amountField'))).controller!.text, '7,40');
+    // A real swipe down closes it, and nothing is saved.
+    await tester.fling(find.byType(AppBar).last, const Offset(0, 500), 1500);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('editorList')), findsNothing);
+    expect(model.store.data.transactions.length, before);
+    // Cancel still works too.
+    await tapKey(tester, 'addExpense');
+    await tester.tap(find.byTooltip('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('editorList')), findsNothing);
   },
   'who uses the phone, and the partner balance': (tester) async {
     final model = await pumpApp(tester);
