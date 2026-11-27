@@ -159,6 +159,8 @@ button.stat:active { background: var(--accent-soft); }
   overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
 }
 .sheet::backdrop { background: rgb(0 0 0 / 0.4); }
+.grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--muted); opacity: 0.45; margin: 8px auto 0; }
+.sheet .sheet-inner { padding-top: 10px; }
 .sheet-inner { padding: 16px 16px calc(env(safe-area-inset-bottom) + 20px); }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .sheet-head h3 { margin: 0; font-size: 1.059rem; }
