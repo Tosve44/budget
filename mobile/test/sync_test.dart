@@ -10,11 +10,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:budget/app_model.dart';
 import 'package:budget/core/models.dart';
 import 'package:budget/core/money.dart';
+import 'package:budget/core/premium.dart';
 import 'package:budget/core/store.dart';
 import 'package:budget/core/supabase.dart';
 import 'package:budget/core/sync.dart';
+import 'package:budget/platform/photo_picker.dart';
+import 'package:budget/platform/purchases.dart';
+import 'package:budget/platform/receipt_reader.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -472,6 +477,98 @@ void main() {
         expect(m.cat(m.house, 'Pets').budget, 2500);
         expect(t.store.category(pets.id)!.icon, '🐶');
       }
+    },
+    skip: skip,
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
+
+  test(
+    'Premium paid on one phone covers the household; it cannot be set by hand, and it runs out',
+    () async {
+      final t = Phone(), m = Phone();
+      await t.sync.signUp(email('prem-t'), 'secret123');
+      final code = await t.sync.createHousehold('Tosve');
+      await m.sync.signUp(email('prem-m'), 'secret456');
+      await m.sync.joinHousehold(code, 'Milica');
+      expect(t.sync.householdPremiumUntil, isNull, reason: 'a new household has no Premium');
+
+      final paid = FakePurchases(owned: true);
+      final tosve = AppModel(
+        store: t.store,
+        photos: t.photos,
+        prefs: MemoryPrefs(),
+        reader: const SampleReceiptReader(),
+        picker: const SamplePhotoPicker(),
+        purchases: paid,
+        everyoneHasPremium: false,
+      )..sync = t.sync;
+      final milica = AppModel(
+        store: m.store,
+        photos: m.photos,
+        prefs: MemoryPrefs(),
+        reader: const SampleReceiptReader(),
+        picker: const SamplePhotoPicker(),
+        purchases: FakePurchases(),
+        everyoneHasPremium: false,
+      )..sync = m.sync;
+      expect(milica.plan, Plan.free);
+
+      // Tosve's store account has Premium: the household gets it for 35 days, Milica too.
+      await tosve.refreshPremium();
+      expect(tosve.plan, Plan.full);
+      final until = t.sync.householdPremiumUntil!;
+      expect(until.difference(DateTime.now()).inDays, inInclusiveRange(34, 35));
+      await m.sync.syncNow();
+      expect(m.sync.householdPremiumUntil, until);
+      await milica.refreshPremium();
+      expect(milica.plan, Plan.full, reason: 'the partner pays');
+      // Milica's phone does not pay, so it never extends it.
+      expect(milica.prefs.get('premiumSharedOn'), isNull);
+
+      // Nobody can give themselves Premium by writing the column.
+      final denied = await expectThrows(() => m.client.update('households', {'premium_until': 'infinity'}, 'id', m.sync.meta.householdId!));
+      expect(denied, isA<SupabaseError>());
+      await m.sync.syncNow();
+      expect(m.sync.householdPremiumUntil, until, reason: 'unchanged');
+
+      // Later: the subscription ended. When the 35 days are over, both are back on the free version.
+      paid.owned = false;
+      await tosve.refreshPremium();
+      expect(tosve.premiumFromStore, isFalse);
+      final later = until.add(const Duration(minutes: 1));
+      final tosveLater = AppModel(
+        store: t.store,
+        photos: t.photos,
+        prefs: MemoryPrefs(),
+        reader: const SampleReceiptReader(),
+        picker: const SamplePhotoPicker(),
+        purchases: paid,
+        everyoneHasPremium: false,
+        now: () => later,
+      )..sync = t.sync;
+      expect(tosveLater.plan, Plan.free);
+
+      // A household that is not signed in cannot extend anything.
+      final stranger = Phone();
+      await stranger.sync.signUp(email('prem-x'), 'secret789');
+      expect(await expectThrows(() => stranger.client.rpc('extend_household_premium', {})), isA<SupabaseError>());
+
+      // The testers' free unlock, given in the SQL editor (here: straight in the test database).
+      final sql = "update public.households set premium_until = 'infinity' where id = '${t.sync.meta.householdId}'";
+      final r = await Process.run('psql', ['-h', '/tmp', '-p', '54329', '-U', 'postgres', '-d', 'budget_test', '-c', sql]);
+      if (r.exitCode != 0) {
+        markTestSkipped('psql not available for the tester unlock: ${r.stderr}');
+        return;
+      }
+      await m.sync.syncNow();
+      expect(m.sync.householdPremiumUntil!.year, 9999);
+      expect(milica.plan, Plan.full);
+      expect(milica.premium.describe(DateTime.now()), 'Your household has Premium for free.');
+      // A paying phone extending it later keeps the free unlock forever.
+      paid.owned = true;
+      tosve.prefs.set('premiumSharedOn', null);
+      await tosve.refreshPremium();
+      expect(t.sync.householdPremiumUntil!.year, 9999);
     },
     skip: skip,
     timeout: const Timeout(Duration(minutes: 3)),

@@ -14,6 +14,7 @@ import '../core/money.dart';
 import '../core/prices.dart';
 import '../core/sync.dart';
 import 'home.dart';
+import 'premium_screen.dart';
 import 'sharing_screen.dart';
 import 'widgets.dart';
 
@@ -189,12 +190,19 @@ class SettingsScreen extends StatelessWidget {
           SectionCard(
             title: 'Version',
             children: [
-              Text(model.plan == Plan.full ? 'Full version' : 'Free version'),
-              if (model.plan == Plan.free)
-                Muted(
-                  'The free version has ${PlanRules.freePersonalExpenses.length} personal and ${PlanRules.freeHouseExpenses.length} house categories. The full version has all categories and your own.',
+              ListTile(
+                key: const Key('openPremium'),
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(model.plan == Plan.full ? Icons.workspace_premium : Icons.lock_outline),
+                title: Text(model.plan == Plan.full ? 'Premium' : 'Free version'),
+                subtitle: Text(
+                  model.plan == Plan.full
+                      ? model.premium.describe(model.now())
+                      : 'The free version has ${PlanRules.freePersonalExpenses.length} personal categories and your Personal budget. See what Premium adds.',
                 ),
-              if (AppConfig.everyoneHasFullVersion) const Muted('While testing, everyone has the full version for free.'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => openPremium(context),
+              ),
             ],
           ),
           Padding(

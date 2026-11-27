@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../app_model.dart';
 import '../core/models.dart';
+import '../core/premium.dart';
+import 'premium_screen.dart';
 import 'prices_screen.dart';
 import 'settings_screen.dart';
 import 'space_screen.dart';
@@ -95,8 +97,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final model = ModelScope.of(context);
     final pages = [
       const SpaceScreen(key: ValueKey('personal'), type: SpaceType.personal),
-      const SpaceScreen(key: ValueKey('house'), type: SpaceType.house),
-      const PricesScreen(),
+      if (PlanRules.can(PremiumFeature.house, model.plan))
+        const SpaceScreen(key: ValueKey('house'), type: SpaceType.house)
+      else
+        const SafeArea(child: PremiumGate(feature: PremiumFeature.house)),
+      if (PlanRules.can(PremiumFeature.prices, model.plan))
+        const PricesScreen()
+      else
+        const SafeArea(child: PremiumGate(feature: PremiumFeature.prices)),
       const SettingsScreen(),
     ];
     return Scaffold(

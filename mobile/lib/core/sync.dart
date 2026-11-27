@@ -33,6 +33,9 @@ class SyncMeta {
   String? lastSyncAt;
   String? lastError;
 
+  /// The household's Premium from the cloud (see households.premium_until), as the server sent it.
+  String? householdPremiumUntil;
+
   SyncMeta();
 
   factory SyncMeta.fromJson(Map<String, dynamic> j) {
@@ -44,7 +47,8 @@ class SyncMeta {
       ..dirtyTransactions = ((j['dirtyTransactions'] as List?) ?? []).cast<String>().toSet()
       ..uploaded = Map<String, String>.from((j['uploaded'] as Map?) ?? {})
       ..lastSyncAt = j['lastSyncAt'] as String?
-      ..lastError = j['lastError'] as String?;
+      ..lastError = j['lastError'] as String?
+      ..householdPremiumUntil = j['householdPremiumUntil'] as String?;
     ((j['tombstones'] as Map?) ?? {}).forEach((k, v) => m.tombstones['$k'] = Transaction.fromJson(Map<String, dynamic>.from(v as Map)));
     ((j['categoryTombstones'] as Map?) ?? {}).forEach(
       (k, v) => m.categoryTombstones['$k'] = Category.fromJson(Map<String, dynamic>.from(v as Map)),
@@ -62,6 +66,7 @@ class SyncMeta {
     'categoryTombstones': categoryTombstones.map((k, v) => MapEntry(k, v.toJson())),
     'uploaded': uploaded,
     'lastSyncAt': lastSyncAt,
+    'householdPremiumUntil': householdPremiumUntil,
     'lastError': lastError,
   };
 
@@ -639,6 +644,13 @@ class SyncEngine {
     var changed = false;
     for (final h in results['households']!) {
       if (h['id'] != meta.householdId) continue;
+      if (h.containsKey('premium_until')) {
+        final p = h['premium_until'] as String?;
+        if (p != meta.householdPremiumUntil) {
+          meta.householdPremiumUntil = p;
+          changed = true;
+        }
+      }
       final cur = (h['currency'] as String?) ?? d.settings.currency;
       final code = h['invite_code'] as String?;
       if (d.settings.currency != cur || d.settings.inviteCode != code) {
@@ -834,6 +846,29 @@ class SyncEngine {
       }
     }
     return changed;
+  }
+
+  // ---- household Premium ----
+
+  /// Until when the household has Premium (null: it has none). 'infinity' is a free unlock.
+  DateTime? get householdPremiumUntil => parsePremiumUntil(meta.householdPremiumUntil);
+
+  static DateTime? parsePremiumUntil(String? v) {
+    if (v == null || v.isEmpty) return null;
+    if (v == 'infinity') return DateTime.utc(9999, 12, 31);
+    if (v == '-infinity') return null;
+    return DateTime.tryParse(v);
+  }
+
+  /// This phone's store account has Premium: keep the household's Premium going for 35 days.
+  Future<void> extendHouseholdPremium() async {
+    if (!isConnected) return;
+    final until = await client.rpc('extend_household_premium', {});
+    if (until is String) meta.householdPremiumUntil = until;
+    _persist();
+    for (final l in List.of(listeners)) {
+      l();
+    }
   }
 
   // ---- household settings ----

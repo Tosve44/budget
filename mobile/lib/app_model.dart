@@ -9,18 +9,20 @@ import 'package:path_provider/path_provider.dart';
 
 import 'core/models.dart';
 import 'core/money.dart';
-import 'core/prices.dart';
+import 'core/premium.dart';
 import 'core/store.dart';
 import 'core/supabase.dart';
 import 'core/sync.dart';
 import 'platform/photo_picker.dart';
+import 'platform/purchases.dart';
 import 'platform/receipt_reader.dart';
 
 class AppConfig {
   AppConfig._();
 
-  /// While Tosve and Milica are testing, everyone has the full version.
-  static const everyoneHasFullVersion = true;
+  /// While Tosve and Milica are testing, everyone has Premium. Store builds are made with
+  /// --dart-define=PREMIUM_REQUIRED=true, and then Premium is bought in the app.
+  static const everyoneHasFullVersion = !bool.fromEnvironment('PREMIUM_REQUIRED');
 
   /// The Supabase project both phones sync through (the same one the web app uses). Both values
   /// are public by design; privacy comes from the database's row level security rules.
@@ -117,8 +119,11 @@ class AppModel extends ChangeNotifier {
   final Prefs prefs;
   final ReceiptReader reader;
   final PhotoPicker picker;
+  final Purchases purchases;
   SyncEngine? sync;
-  Plan plan;
+
+  /// Everyone has Premium (test builds).
+  final bool everyoneHasPremium;
   String? saveProblem;
   Timer? _tick;
 
@@ -128,8 +133,11 @@ class AppModel extends ChangeNotifier {
     required this.prefs,
     required this.reader,
     required this.picker,
-    this.plan = Plan.full,
-  }) {
+    Purchases? purchases,
+    this.everyoneHasPremium = true,
+    DateTime Function()? now,
+  }) : purchases = purchases ?? FakePurchases(),
+       now = now ?? DateTime.now {
     store.listeners.add(_storeChanged);
   }
 
@@ -163,6 +171,71 @@ class AppModel extends ChangeNotifier {
     super.dispose();
   }
 
+  // ---- Premium ----
+
+  final DateTime Function() now;
+
+  /// The store account on this phone has Premium (remembered, so it also works offline).
+  bool get premiumFromStore => prefs.get('premiumFromStore') == 'yes';
+  set premiumFromStore(bool v) {
+    if (v == premiumFromStore) return;
+    prefs.set('premiumFromStore', v ? 'yes' : null);
+    notifyListeners();
+  }
+
+  PremiumStatus get premium =>
+      PremiumStatus(everyone: everyoneHasPremium, fromStore: premiumFromStore, householdUntil: sync?.householdPremiumUntil);
+
+  Plan get plan => premium.plan(now());
+
+  /// Asks the store at start and when the app comes back. If this phone pays for Premium, the
+  /// household gets it too, so the partner does not have to pay as well.
+  Future<void> refreshPremium() async {
+    if (!everyoneHasPremium) {
+      try {
+        // When the store cannot be asked (offline), Premium stays as it was.
+        final owns = await purchases.ownsPremium();
+        if (owns != null) premiumFromStore = owns;
+      } catch (_) {}
+    }
+    await shareHouseholdPremium();
+  }
+
+  /// Keeps the household's Premium going while this phone's store account has it (once a day).
+  Future<void> shareHouseholdPremium() async {
+    final s = sync;
+    if (!premiumFromStore || s == null || !s.isConnected) return;
+    final today = DateKey.day(now());
+    if (prefs.get('premiumSharedOn') == today) return;
+    try {
+      await s.extendHouseholdPremium();
+      prefs.set('premiumSharedOn', today);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<PurchaseOutcome> buyPremium(PremiumProduct p) async {
+    final o = await purchases.buy(p);
+    if (o == PurchaseOutcome.bought) {
+      premiumFromStore = true;
+      prefs.set('premiumSharedOn', null);
+      await shareHouseholdPremium();
+    }
+    return o;
+  }
+
+  /// "Restore purchases". True when Premium was found, null when the store could not be asked.
+  Future<bool?> restorePremium() async {
+    final owned = await purchases.restore();
+    if (owned == null) return null;
+    premiumFromStore = owned;
+    if (owned) {
+      prefs.set('premiumSharedOn', null);
+      await shareHouseholdPremium();
+    }
+    return plan == Plan.full;
+  }
+
   String get currency => store.data.settings.currency;
   String money(int cents) => Money.format(cents, currency: currency);
 
@@ -186,7 +259,8 @@ class AppModel extends ChangeNotifier {
       prefs: FilePrefs(File('${folder.path}/prefs.json')),
       reader: const DeviceReceiptReader(),
       picker: const DevicePhotoPicker(),
-      plan: AppConfig.everyoneHasFullVersion ? Plan.full : Plan.free,
+      purchases: AppConfig.everyoneHasFullVersion ? FakePurchases() : StorePurchases(),
+      everyoneHasPremium: AppConfig.everyoneHasFullVersion,
     );
     if (AppConfig.supabaseUrl.isNotEmpty && AppConfig.supabaseAnonKey.isNotEmpty) {
       final metaFile = File('${folder.path}/sync.json');
@@ -218,7 +292,13 @@ class AppModel extends ChangeNotifier {
   }
 
   /// For tests and screenshots: a fresh start in memory, optionally with sample entries.
-  static AppModel forTests({bool demo = false, bool asMilica = false, Plan plan = Plan.full, ReceiptReader? reader}) {
+  static AppModel forTests({
+    bool demo = false,
+    bool asMilica = false,
+    Plan plan = Plan.full,
+    ReceiptReader? reader,
+    FakePurchases? purchases,
+  }) {
     final store = BudgetStore(storage: MemoryStorage());
     if (asMilica) store.setCurrentUser('u_milica');
     if (demo) DemoData.fill(store);
@@ -228,7 +308,8 @@ class AppModel extends ChangeNotifier {
       prefs: MemoryPrefs(),
       reader: reader ?? const SampleReceiptReader(),
       picker: const SamplePhotoPicker(),
-      plan: plan,
+      purchases: purchases ?? FakePurchases(),
+      everyoneHasPremium: plan == Plan.full,
     );
   }
 }

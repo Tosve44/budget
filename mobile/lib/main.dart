@@ -14,7 +14,7 @@ Future<void> main() async {
   await setUpLocale();
   final model = await AppModel.live();
   runApp(BudgetApp(model: model));
-  model.syncIfConnected();
+  model.syncIfConnected().whenComplete(model.refreshPremium);
 }
 
 /// Money and dates are shown the way the phone is set up (for example "1.234,50 €" in Slovenia).
@@ -53,7 +53,7 @@ class _BudgetAppState extends State<BudgetApp> with WidgetsBindingObserver {
   // Sync when the app comes back to the foreground.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) widget.model.syncIfConnected();
+    if (state == AppLifecycleState.resumed) widget.model.syncIfConnected().whenComplete(widget.model.refreshPremium);
   }
 
   @override

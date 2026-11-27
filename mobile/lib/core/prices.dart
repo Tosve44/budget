@@ -2,7 +2,10 @@ import 'package:unorm_dart/unorm_dart.dart' as unorm;
 
 import 'models.dart';
 import 'money.dart';
+import 'premium.dart';
 import 'store.dart';
+
+export 'premium.dart' show Plan, PlanRules;
 
 class PricePoint {
   final String date;
@@ -112,25 +115,6 @@ class PartnerBalance {
     if (amount == 0) return null;
     return diff > 0 ? PartnerTransfer(a, b, amount) : PartnerTransfer(b, a, amount);
   }
-}
-
-/// Prepared for a later store release: a free version with fewer categories and a paid version
-/// with all categories plus your own. While testing, everyone has the full version.
-enum Plan { free, full }
-
-class PlanRules {
-  PlanRules._();
-  static const freePersonalExpenses = {'Rent', 'Groceries', 'Food & Drinks', 'Car', 'Shopping', 'Saving', 'Partner balance'};
-  static const freeHouseExpenses = {'Groceries', 'Shopping', 'Unexpected expenses'};
-
-  static bool isAvailable(Category c, Space? space, Plan plan) {
-    if (plan == Plan.full || c.kind == EntryKind.income) return true;
-    final free = space?.type == SpaceType.house ? freeHouseExpenses : freePersonalExpenses;
-    return free.contains(c.name);
-  }
-
-  static bool canAddCustomCategory(Plan plan) => plan == Plan.full;
-  static bool canRenameCategory(Plan plan) => plan == Plan.full;
 }
 
 extension StoreExtras on BudgetStore {

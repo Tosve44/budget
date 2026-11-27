@@ -4,12 +4,20 @@
 import 'package:budget/app_model.dart';
 import 'package:budget/core/models.dart';
 import 'package:budget/core/money.dart';
+import 'package:budget/core/premium.dart';
 import 'package:budget/main.dart';
+import 'package:budget/platform/purchases.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Future<AppModel> pumpApp(WidgetTester tester, {bool demo = false, bool asMilica = false}) async {
-  final model = AppModel.forTests(demo: demo, asMilica: asMilica);
+Future<AppModel> pumpApp(
+  WidgetTester tester, {
+  bool demo = false,
+  bool asMilica = false,
+  Plan plan = Plan.full,
+  FakePurchases? purchases,
+}) async {
+  final model = AppModel.forTests(demo: demo, asMilica: asMilica, plan: plan, purchases: purchases);
   await tester.pumpWidget(BudgetApp(model: model));
   await tester.pumpAndSettle();
   return model;
@@ -310,6 +318,73 @@ final flows = <String, Future<void> Function(WidgetTester)>{
     expect(tester.widget<Text>(find.byKey(const Key('chipIcon.Groceries')).first).data, '🛒');
     await reveal(tester, find.byKey(const Key('chipIcon.Pets')));
     expect(tester.widget<Text>(find.byKey(const Key('chipIcon.Pets')).first).data, '🏷️');
+  },
+  'free version: House, Prices and receipt photos lead to Premium; buying unlocks them': (tester) async {
+    final store = FakePurchases();
+    final model = await pumpApp(tester, demo: true, plan: Plan.free, purchases: store);
+    expect(model.plan, Plan.free);
+    await tapKey(tester, 'tab.house');
+    expect(find.byKey(const Key('premiumGate.house')), findsOneWidget);
+    await tapKey(tester, 'tab.prices');
+    expect(find.byKey(const Key('premiumGate.prices')), findsOneWidget);
+    // Only the main categories can be picked, and a receipt photo needs Premium.
+    await tapKey(tester, 'tab.personal');
+    await tapKey(tester, 'addExpense');
+    await reveal(tester, find.byKey(const Key('chip.Groceries')));
+    expect(find.byKey(const Key('chip.Groceries')), findsOneWidget);
+    expect(find.byKey(const Key('chip.Nicotine')), findsNothing);
+    await tapKey(tester, 'scanReceipt');
+    await reveal(tester, find.byKey(const Key('premiumBecause')));
+    expect(find.byKey(const Key('premiumBecause')), findsOneWidget);
+    // A failed purchase changes nothing and says so.
+    store.nextOutcome = PurchaseOutcome.failed;
+    await tapKey(tester, 'buy.premium_yearly');
+    await reveal(tester, find.byKey(const Key('premiumMessage')));
+    expect(find.byKey(const Key('premiumMessage')), findsOneWidget);
+    expect(model.plan, Plan.free);
+    // A cancelled one says nothing.
+    store.nextOutcome = PurchaseOutcome.cancelled;
+    await tapKey(tester, 'buy.premium_monthly');
+    expect(find.byKey(const Key('premiumMessage')), findsNothing);
+    expect(model.plan, Plan.free);
+    store.nextOutcome = PurchaseOutcome.bought;
+    await tapKey(tester, 'buy.premium_yearly');
+    expect(store.bought, [PremiumProduct.yearly]);
+    expect(model.plan, Plan.full);
+    expect(find.byKey(const Key('buy.premium_monthly')), findsNothing, reason: 'nothing more to buy');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await reveal(tester, find.byKey(const Key('chip.Nicotine')));
+    expect(find.byKey(const Key('chip.Nicotine')), findsOneWidget, reason: 'all categories now');
+    Navigator.of(tester.element(find.byKey(const Key('editorList')))).pop();
+    await tester.pumpAndSettle();
+    await tapKey(tester, 'tab.house');
+    expect(find.byKey(const Key('premiumGate.house')), findsNothing);
+    await tapKey(tester, 'tab.prices');
+    expect(find.byKey(const Key('premiumGate.prices')), findsNothing);
+  },
+  'restore purchases on a new phone, and when there is nothing to restore': (tester) async {
+    final store = FakePurchases(owned: true);
+    final model = await pumpApp(tester, plan: Plan.free, purchases: store);
+    await tapKey(tester, 'tab.settings');
+    await tapKey(tester, 'openPremium');
+    expect(model.plan, Plan.free, reason: 'not asked yet');
+    await tapKey(tester, 'restorePurchases');
+    expect(model.plan, Plan.full);
+    await reveal(tester, find.text('Premium is back on this phone.'));
+    expect(find.text('Premium is back on this phone.'), findsOneWidget);
+    // The subscription ran out: restoring finds nothing and the free version is back.
+    store.owned = false;
+    await tapKey(tester, 'restorePurchases');
+    expect(model.plan, Plan.free);
+    await reveal(tester, find.text('No Premium purchase was found for this store account.'));
+    expect(find.text('No Premium purchase was found for this store account.'), findsOneWidget);
+    // No internet: nothing changes, and it says why.
+    store.storeReachable = false;
+    await tapKey(tester, 'restorePurchases');
+    expect(model.plan, Plan.free);
+    await reveal(tester, find.byKey(const Key('premiumMessage')));
+    expect((tester.widget(find.byKey(const Key('premiumMessage'))) as Text).data, contains('cannot be reached'));
   },
   'who uses the phone, and the partner balance': (tester) async {
     final model = await pumpApp(tester);

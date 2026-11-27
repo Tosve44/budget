@@ -4,8 +4,10 @@ import '../core/category_icons.dart';
 import '../core/entry_draft.dart';
 import '../core/models.dart';
 import '../core/money.dart';
+import '../core/premium.dart';
 import '../core/prices.dart';
 import 'home.dart';
+import 'premium_screen.dart';
 import 'widgets.dart';
 
 /// Add or change an entry. A receipt photo fills in the items and the total.
@@ -299,6 +301,7 @@ class _EntryEditorState extends State<EntryEditor> {
   Widget _receiptSection(BuildContext context, dynamic model) {
     final store = ModelScope.of(context).store;
     final pal = Palette.of(context);
+    final scanning = PlanRules.can(PremiumFeature.receipts, ModelScope.of(context).plan);
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -323,13 +326,13 @@ class _EntryEditorState extends State<EntryEditor> {
                 children: [
                   OutlinedButton.icon(
                     key: const Key('scanReceipt'),
-                    onPressed: () => addPhoto(camera: true),
+                    onPressed: () => scanning ? addPhoto(camera: true) : openPremium(context, because: PremiumFeature.receipts),
                     icon: const Icon(Icons.photo_camera_outlined),
                     label: Text(draft.receiptId == null ? 'Take photo' : 'New photo'),
                   ),
                   OutlinedButton.icon(
                     key: const Key('photoFromLibrary'),
-                    onPressed: () => addPhoto(camera: false),
+                    onPressed: () => scanning ? addPhoto(camera: false) : openPremium(context, because: PremiumFeature.receipts),
                     icon: const Icon(Icons.photo_library_outlined),
                     label: const Text('From photos'),
                   ),
