@@ -59,6 +59,33 @@ for (let i = 0; i < 4000; i++) {
   const text = Array.from({ length: int(1, 18) }, line).join(rnd() < 0.2 ? '\r\n' : '\n');
   receipts.push({ text, items: receipt.parseReceipt(text), total: receipt.findTotal(text) });
 }
+// Receipts with quantities and weights (on the line below, above, or with the total), and
+// litres misread as "1": made with their own random numbers so the cases above stay the same.
+const keep = seed;
+seed = 20261127;
+const qtyNames = ['BANANE', 'Paradižnik', 'JOGURT NAVADNI 180G', 'Piščančje prsi', 'Mleko pilos 3,5% 11', 'Radenska 1,51',
+  'Oljčno olje 0,751', 'Olje vita d\'or 11', 'KRUH 5006', 'Jabolka', 'SIR 1509', 'Voda 0,51'];
+const qtyLine = (q, each) => pick([`${q} x ${each}`, `${q} kg x ${each} EUR/kg`, `${q} kom x ${each}`, `${q}*${each}`, `${q} g x ${each}`, `${q} kos. x ${each}`]);
+for (let i = 0; i < 1500; i++) {
+  const ls = [];
+  for (let k = int(1, 8); k > 0; k--) {
+    const nm = pick(qtyNames);
+    const each = int(10, 1500);
+    const q = pick([2, 3, int(2, 6), `0,${int(100, 999)}`, `1,${int(0, 999)}`, `${int(100, 900)}`, 1]);
+    const qn = Number(String(q).replace(',', '.'));
+    const tot = rnd() < 0.8 ? Math.round(qn * each) : int(10, 3000); // sometimes it doesn't add up (a misread)
+    const eur = (c) => `${Math.floor(c / 100)},${String(c % 100).padStart(2, '0')}`;
+    const r = rnd();
+    if (r < 0.35) ls.push(nm, `  ${qtyLine(q, eur(each))}${pad()}${eur(tot)}${tail()}`);
+    else if (r < 0.6) ls.push(`${nm}${pad()}${eur(tot)}${tail()}`, `  ${qtyLine(q, eur(each))}`);
+    else if (r < 0.8) ls.push(qtyLine(q, eur(each)), `${nm}${pad()}${eur(tot)}${tail()}`);
+    else ls.push(`${nm}${pad()}${eur(tot)}${tail()}`);
+    if (rnd() < 0.15) ls.push(line());
+  }
+  const text = ls.join('\n');
+  receipts.push({ text, items: receipt.parseReceipt(text), total: receipt.findTotal(text) });
+}
+seed = keep;
 writeFileSync(`${out}/receipts.json`, JSON.stringify(receipts));
 
 // ---------- money typing ----------
@@ -121,4 +148,31 @@ for (let i = 0; i < 300; i++) {
 writeFileSync(`${out}/webdata.json`, s.exportJSON());
 writeFileSync(`${out}/webanswers.json`, JSON.stringify({ summaries, entryOrder, history, previous }));
 writeFileSync(`${out}/webinitial.json`, JSON.stringify(store.createInitialData()));
+
+// Price history with quantities: the price of one piece / one kilo.
+seed = 20261128;
+const q = new store.Store(new Mem());
+const qcat = q.data.categories.find((c) => c.spaceId === 'sp_personal_tosve' && c.name === 'Groceries').id;
+const qnames = ['BANANE', 'Banane', 'JOGURT 180G', 'Jogurt 180g', 'Piščančje prsi', 'MLEKO 1L'];
+for (let i = 0; i < 300; i++) {
+  const its = Array.from({ length: int(1, 4) }, () => {
+    const price = int(10, 2000);
+    const r = rnd();
+    if (r < 0.3) return { name: pick(qnames), price };
+    const qty = r < 0.6 ? int(2, 5) : int(100, 2500) / 1000;
+    const unitPrice = rnd() < 0.7 ? Math.round(price / qty) : int(10, 2000); // sometimes it doesn't add up
+    return { name: pick(qnames), price, qty, ...(r >= 0.6 || rnd() < 0.1 ? { unit: 'kg' } : {}), unitPrice };
+  });
+  q.addTransaction({ spaceId: 'sp_personal_tosve', categoryId: qcat, kind: 'expense', amount: int(1, 9000), date: `${pick(months)}-${String(int(1, 28)).padStart(2, '0')}`, items: its });
+}
+const qprev = [];
+for (let i = 0; i < 200; i++) {
+  const nm = pick(qnames), d = `${pick(months)}-${String(int(1, 28)).padStart(2, '0')}`;
+  qprev.push({ name: nm, before: d, result: q.previousPrice(nm, d) });
+}
+writeFileSync(`${out}/quantities.json`, JSON.stringify({
+  data: q.data,
+  history: [...q.itemHistory().values()].map((g) => ({ key: g.key, prices: g.entries.map((e) => e.price), units: g.entries.map((e) => e.unit ?? null) })),
+  previous: qprev,
+}));
 console.log(`Wrote golden files to ${out}: ${receipts.length} receipts, ${money.length} money inputs, ${normalized.length} names, ${s.data.transactions.length} entries.`);

@@ -7,8 +7,20 @@ import 'store.dart';
 class DraftLine {
   String name;
   String priceText;
-  DraftLine({this.name = '', this.priceText = ''});
-  DraftLine.of(ReceiptItem it) : name = it.name, priceText = Money.inputText(it.price, emptyForZero: false);
+
+  /// The receipt line as read (or as saved), with its quantity; null for a line typed by hand.
+  final ReceiptItem? read;
+  DraftLine({this.name = '', this.priceText = '', this.read});
+  DraftLine.of(ReceiptItem it) : name = it.name, priceText = Money.inputText(it.price, emptyForZero: false), read = it;
+
+  /// The line as it is now. A quantity stays; a corrected price drops the printed price of one.
+  ReceiptItem? item({int? maxName}) {
+    final p = Money.cents(priceText);
+    if (p == null) return null;
+    final n = maxName == null ? name.trim() : Limits.clip(name.trim(), maxName);
+    final r = read;
+    return r == null ? ReceiptItem(name: n, price: p) : r.copyWith(name: n, price: p);
+  }
 }
 
 class DraftProblem implements Exception {
@@ -33,7 +45,10 @@ class Comparison {
   final double percent;
   final int before;
   final String date;
-  const Comparison(this.kind, {this.percent = 0, this.before = 0, this.date = ''});
+
+  /// [before] is a price per kilo.
+  final bool perKg;
+  const Comparison(this.kind, {this.percent = 0, this.before = 0, this.date = '', this.perKg = false});
 }
 
 class CheckedEntry {
@@ -80,7 +95,7 @@ class EntryDraft {
       if (name.isEmpty) continue;
       final p = Money.cents(l.priceText);
       if (p == null || p < 0 || p > Limits.maxCents) throw DraftProblem.itemPrice(name);
-      out.add(ReceiptItem(name: Limits.clip(name, Limits.itemName), price: p));
+      out.add(l.item(maxName: Limits.itemName)!);
     }
     return out;
   }
@@ -138,6 +153,9 @@ class EntryDraft {
     final found = ReceiptParser.parse(text);
     if (found.isNotEmpty) lines = found.map(DraftLine.of).toList();
     final total = ReceiptParser.findTotal(text);
+    final sum = found.fold(0, (s, it) => s + it.price);
+    // A misread digit (5 as 9, 1 as 7) would show up later as a fake price jump.
+    mismatch = total != null && found.isNotEmpty && total != sum ? (sum, total) : null;
     if (total != null) {
       amountText = Money.inputText(total, emptyForZero: false);
     } else if (found.isNotEmpty && Money.cents(amountText) == null) {
@@ -146,15 +164,20 @@ class EntryDraft {
     return found.length;
   }
 
+  /// After reading a receipt: (items add up to, printed total) when they differ.
+  (int, int)? mismatch;
+
   int get linesTotal => lines.map((l) => Money.cents(l.priceText) ?? 0).fold(0, (a, b) => a + b);
 
   Comparison? comparison(DraftLine line, BudgetStore store) {
-    final price = Money.cents(line.priceText);
-    if (price == null || line.name.trim().isEmpty) return null;
+    final it = line.item();
+    if (it == null || line.name.trim().isEmpty) return null;
+    final price = it.perUnit;
     final prev = store.previousPrice(line.name, date, excluding: existingId);
-    if (prev == null) return const Comparison('new');
+    if (prev == null) return Comparison('new', perKg: it.unit == 'kg');
     final pct = Money.percentChange(price, prev.price);
-    if (pct == null || pct == 0) return Comparison('same', before: prev.price, date: prev.date);
-    return Comparison(pct > 0 ? 'up' : 'down', percent: pct, before: prev.price, date: prev.date);
+    final kg = prev.unit == 'kg';
+    if (pct == null || pct == 0) return Comparison('same', before: prev.price, date: prev.date, perKg: kg);
+    return Comparison(pct > 0 ? 'up' : 'down', percent: pct, before: prev.price, date: prev.date, perKg: kg);
   }
 }

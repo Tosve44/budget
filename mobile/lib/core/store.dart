@@ -344,8 +344,18 @@ class BudgetStore {
   }
 }
 
-List<ReceiptItem> _cleanItems(List<ReceiptItem> items) =>
-    items.take(Limits.items).map((it) => ReceiptItem(name: Limits.clip(it.name, Limits.itemName), price: Limits.clamp(it.price))).toList();
+List<ReceiptItem> _cleanItems(List<ReceiptItem> items) => items
+    .take(Limits.items)
+    .map(
+      (it) => ReceiptItem(
+        name: Limits.clip(it.name, Limits.itemName),
+        price: Limits.clamp(it.price),
+        qty: it.qty,
+        unit: it.unit,
+        unitPrice: it.unitPrice,
+      ),
+    )
+    .toList();
 
 T? _first<T>(Iterable<T> list, bool Function(T) test) {
   for (final x in list) {

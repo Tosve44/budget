@@ -108,7 +108,7 @@ void main() {
         kind: EntryKind.expense,
         amount: 4520,
         date: '2026-11-11',
-        items: [const ReceiptItem(name: 'Mleko 1L', price: 129)],
+        items: [ReceiptItem(name: 'Mleko 1L', price: 129)],
       );
       t.store.updateCategory(t.cat(t.house, 'Groceries').id, budget: 40000);
       expect(await t.sync.signUp(email('tosve'), 'secret123'), isTrue);
@@ -273,7 +273,7 @@ void main() {
         kind: EntryKind.expense,
         amount: 839,
         date: '2026-11-19',
-        items: [const ReceiptItem(name: 'Kruh', price: 149)],
+        items: [ReceiptItem(name: 'Kruh', price: 149)],
         receiptId: photoId,
       );
       await t.sync.syncNow();
@@ -592,7 +592,7 @@ void main() {
         kind: EntryKind.expense,
         amount: 4520,
         date: '2026-11-11',
-        items: [const ReceiptItem(name: 'Čokolada Milka 100g', price: 159)],
+        items: [ReceiptItem(name: 'Čokolada Milka 100g', price: 159)],
       );
       await t.sync.signUp(email('mix-t'), 'secret123');
       final code = await t.sync.createHousehold('Tosve');
@@ -620,7 +620,7 @@ void main() {
       await web.run('sync');
       await t.sync.syncNow();
       expect(t.entry(webEntry)?.note, 'Bled');
-      expect(t.entry(webEntry)?.items, [const ReceiptItem(name: 'Parking', price: 500)]);
+      expect(t.entry(webEntry)?.items, [ReceiptItem(name: 'Parking', price: 500)]);
       expect(t.store.user(t.entry(webEntry)!.createdBy)?.name, 'Milica');
       expect(t.store.categories(t.house.id).firstWhere((c) => c.name == 'Home stuff').budget, 7000);
       expect(t.store.categories(t.house.id).where((c) => c.name == 'Shopping'), isEmpty);

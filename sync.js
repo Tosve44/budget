@@ -3,7 +3,7 @@
 // changes and downloads the partner's changes whenever there is a connection.
 // The cloud tables are described in supabase/migrations/*.sql and SYNC.md.
 
-import { uid, createInitialData } from './store.js';
+import { uid, createInitialData, cleanItem } from './store.js';
 
 const META_KEY = 'budget.sync.v1';
 const PAGE = 1000;           // Supabase returns at most 1000 rows per request
@@ -40,7 +40,7 @@ export function rowToTx(r) {
     date: String(r.date).slice(0, 10), note: r.note || '', createdBy: r.created_by,
     createdAt: iso(r.created_at), updatedAt: iso(r.updated_at),
   };
-  if (Array.isArray(r.items) && r.items.length) t.items = r.items.map((i) => ({ name: i.name, price: Number(i.price) }));
+  if (Array.isArray(r.items) && r.items.length) t.items = r.items.map((i) => cleanItem({ name: i.name, price: Number(i.price), qty: i.qty, unit: i.unit, unitPrice: i.unitPrice }));
   if (r.receipt_path) t.receiptId = `cloud:${r.receipt_path}`;
   return t;
 }

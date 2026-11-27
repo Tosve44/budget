@@ -212,10 +212,27 @@ const SKIP = /\b(skupaj|za pla[čc]ilo|ddv|vrnjeno|vra[čc]ilo|zoi|eor|davčna|d
 // so a little junk between the price and the end of the line is allowed.
 const PRICE_AT_END = /(?<=^|[\s€:])(-?\d{1,3}(?:\.\d{3})+,\d{2}|-?\d+[.,;:] ?\d{2})[\s\W_]*(?:[A-ZĐŠČĆŽ€$]{1,3}|[a-e])?[\s\W_]*$/u;
 
-// Common misreads in product names: "500G" read as "5006", "150g" as "1509".
+// Common misreads in product names: "500G" read as "5006", "150g" as "1509", and a small
+// "l" (litre) read as "1": "1,5l" as "1,51", "0,75l" as "0,751", "3,5% 1l" as "3,5% 11".
 function fixName(name) {
   const upper = name === name.toUpperCase();
-  return name.replace(/\b(\d*[1-9]0{1,2})[69]\b/g, (_, n) => n + (upper ? 'G' : 'g'));
+  let n = name.replace(/\b(\d*[1-9]0{1,2})[69]\b/g, (_, d) => d + (upper ? 'G' : 'g'));
+  if (!upper) n = n.replace(/\b(\d,\d{1,2})1\b/g, '$1l').replace(/(%\s?)11\b/g, (_, pct) => `${pct}1l`).replace(/\b11$/, '1l');
+  return n;
+}
+
+// "2 x 0,59", "0,856 kg x 1,49", "350 g x 12,99": how many (or how much) and the price of one
+// (or of a kilo). Returns null when the line doesn't say.
+function readQuantity(text) {
+  const m = String(text).match(/^([\d.,]+)\s*(kom|kos|kg|g|pcs|st)?\.?\s*[x×*]\s*([\d.,]+)/i);
+  if (!m) return null;
+  let qty = Number(m[1].replace(',', '.'));
+  const unitWord = (m[2] || '').toLowerCase();
+  if (unitWord === 'g') qty /= 1000;
+  if (!(qty > 0) || qty > 999 || qty === 1) return null;
+  const byWeight = unitWord === 'kg' || unitWord === 'g' || !Number.isInteger(qty);
+  const each = toCents(m[3].replace(/[;:]/g, ','));
+  return { qty: Math.round(qty * 1000) / 1000, unit: byWeight ? 'kg' : undefined, unitPrice: Number.isFinite(each) && each > 0 ? each : undefined };
 }
 
 // The receipt's grand total ("SKUPAJ", "ZA PLAČILO", "TOTAL"...), which already includes discounts.
@@ -236,6 +253,7 @@ export function findTotal(text) {
 
 export function parseReceipt(text) {
   const items = [];
+  const at = new Map(); // item -> its line
   const lines = String(text).split(/\r?\n/).map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -249,14 +267,39 @@ export function parseReceipt(text) {
     // Quantity lines like "2 x 1,29" or "0,750 kg x 199,99": the product name is usually on the line above.
     const qtyOnly = /^[\d.,]+\s*(kom|kg|g|l|pcs|st)?\s*[x×*]\s*[\d.,]+/i.test(name);
     if (!qtyOnly && !/\p{L}{2,}/u.test(name)) continue; // e.g. a date and time "25.11.2026 10:15"
+    let amount = null;
     if (qtyOnly) {
       const above = lines[i - 1] && !PRICE_AT_END.test(lines[i - 1]) && !SKIP.test(lines[i - 1]) ? lines[i - 1] : null;
-      if (above && /\p{L}{2,}/u.test(above)) name = above;
+      if (above && /\p{L}{2,}/u.test(above)) { amount = readQuantity(name); name = above; }
       else continue;
     }
     name = name.replace(/[|_~*#"]+/g, ' ').replace(/\s+/g, ' ').replace(/^[\d.,\s]+(?=\p{L})/u, '').trim();
     if (name.length < 2) continue;
-    items.push({ name: fixName(name), price });
+    const item = { name: fixName(name), price };
+    if (amount) addQuantity(item, amount);
+    items.push(item);
+    at.set(item, i);
+  }
+  // Other layouts put the quantity on its own line, without the line total: below the product
+  // ("Paradižnik 1,15" then "0,620 kg x 1,85 EUR/kg", Lidl) or above it ("2 x 0,89" then
+  // "JOGURT 1,78", Mercator). Use it when the numbers agree with that product's line total.
+  const byLine = new Map(items.map((it) => [at.get(it), it]));
+  for (let i = 0; i < lines.length; i++) {
+    if (byLine.has(i) || SKIP.test(lines[i])) continue;
+    const amount = readQuantity(lines[i]);
+    if (!amount || !amount.unitPrice) continue;
+    for (const j of [i - 1, i + 1]) {
+      const it = byLine.get(j);
+      if (it && !it.qty && Math.abs(Math.round(amount.qty * amount.unitPrice) - it.price) <= 1) { addQuantity(it, amount); break; }
+    }
   }
   return items;
+}
+
+function addQuantity(item, amount) {
+  item.qty = amount.qty;
+  if (amount.unit) item.unit = amount.unit;
+  // The printed price of one (or of a kilo) is exact; dividing the line total is off by a cent
+  // sometimes. Used only when the numbers agree (otherwise one of them is misread).
+  if (amount.unitPrice && Math.abs(Math.round(amount.qty * amount.unitPrice) - item.price) <= 1) item.unitPrice = amount.unitPrice;
 }

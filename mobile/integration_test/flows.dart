@@ -7,6 +7,7 @@ import 'package:budget/core/money.dart';
 import 'package:budget/core/premium.dart';
 import 'package:budget/main.dart';
 import 'package:budget/platform/purchases.dart';
+import 'package:budget/platform/receipt_reader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -16,8 +17,9 @@ Future<AppModel> pumpApp(
   bool asMilica = false,
   Plan plan = Plan.full,
   FakePurchases? purchases,
+  ReceiptReader? reader,
 }) async {
-  final model = AppModel.forTests(demo: demo, asMilica: asMilica, plan: plan, purchases: purchases);
+  final model = AppModel.forTests(demo: demo, asMilica: asMilica, plan: plan, purchases: purchases, reader: reader);
   await tester.pumpWidget(BudgetApp(model: model));
   await tester.pumpAndSettle();
   return model;

@@ -10,7 +10,9 @@
 //   categories:   [{ id, spaceId, name, kind: "expense" | "income", budget, order, archived, updatedAt? }],
 //   transactions: [{ id, spaceId, categoryId, kind, amount, date, note, createdBy, createdAt, updatedAt,
 //                    receiptId?,            // id of the receipt photo (stored separately, see photos.js)
-//                    items?: [{ name, price }] }]  // receipt lines, price = line total in cents
+//                    items?: [{ name, price, qty?, unit?, unitPrice? }] }]  // receipt lines, price = line total in cents;
+//                    // qty: how many (2) or how much (0.856 with unit "kg") when the receipt says so,
+//                    // unitPrice: the printed price of one piece or one kilo
 // }
 // Money is always stored as whole cents (integers) to avoid rounding errors.
 // Dates are "YYYY-MM-DD" strings; months are "YYYY-MM".
@@ -221,7 +223,9 @@ export class Store {
         const key = normalizeItem(it.name);
         if (!key) continue;
         if (!map.has(key)) map.set(key, { key, name: it.name, entries: [] });
-        map.get(key).entries.push({ date: t.date, price: it.price, txId: t.id, spaceId: t.spaceId, createdAt: t.createdAt });
+        // price: of one piece or one kilo (see pricePerUnit), so buying two, or a bigger bunch of
+        // bananas, does not look like a price rise.
+        map.get(key).entries.push({ date: t.date, price: pricePerUnit(it), unit: it.unit, txId: t.id, spaceId: t.spaceId, createdAt: t.createdAt });
       }
     }
     for (const g of map.values()) g.entries.sort((a, b) => (a.date + a.createdAt).localeCompare(b.date + b.createdAt));
@@ -235,7 +239,7 @@ export class Store {
     for (const t of this.data.transactions) {
       if (t.id === excludeTxId || t.date > beforeDate) continue;
       for (const it of t.items || []) {
-        if (normalizeItem(it.name) === key && (!best || t.date >= best.date)) best = { date: t.date, price: it.price };
+        if (normalizeItem(it.name) === key && (!best || t.date >= best.date)) best = { date: t.date, price: pricePerUnit(it), ...(it.unit ? { unit: it.unit } : {}) };
       }
     }
     return best;
@@ -281,7 +285,28 @@ export function categoryIcon(catOrName) {
 
 function clip(s, max) { return String(s || '').slice(0, max); }
 function cleanItems(items) {
-  return items.slice(0, LIMITS.items).map((it) => ({ ...it, name: clip(it.name, LIMITS.itemName) }));
+  return items.slice(0, LIMITS.items).map((it) => cleanItem({ ...it, name: clip(it.name, LIMITS.itemName) }));
+}
+
+// Keep a receipt line's quantity only when it makes sense (a bad one would spoil the price history).
+export function cleanItem(it) {
+  const out = { ...it };
+  delete out.qty; delete out.unit; delete out.unitPrice;
+  const qty = Number(it.qty);
+  if (Number.isFinite(qty) && qty > 0 && qty <= 999 && qty !== 1) {
+    out.qty = Math.round(qty * 1000) / 1000;
+    if (it.unit === 'kg') out.unit = 'kg';
+    const up = Number(it.unitPrice);
+    if (Number.isInteger(up) && up > 0 && Math.abs(Math.round(out.qty * up) - it.price) <= 1) out.unitPrice = up;
+  }
+  return out;
+}
+
+// Price of one piece, or of one kilo, for comparing prices between shopping trips.
+// "2 x 0,59 = 1,18" is 0,59; "0,856 kg x 1,49 = 1,28" is 1,49 per kilo.
+export function pricePerUnit(it) {
+  if (!(it.qty > 0)) return it.price;
+  return it.unitPrice > 0 ? it.unitPrice : Math.round(it.price / it.qty);
 }
 
 export function toCents(input) {

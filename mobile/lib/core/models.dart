@@ -164,17 +164,76 @@ class ReceiptItem {
 
   /// Line total in cents.
   final int price;
-  const ReceiptItem({required this.name, required this.price});
-  factory ReceiptItem.fromJson(Map<String, dynamic> j) => ReceiptItem(name: '${j['name'] ?? ''}', price: _int(j['price']));
-  Map<String, dynamic> toJson() => {'name': name, 'price': price};
+
+  /// How many ("2 x 0,59": 2) or how much ("0,856 kg x 1,49": 0.856 with [unit] "kg"), when
+  /// the receipt says so. Never 1.
+  final double? qty;
+
+  /// "kg" for things sold by weight, otherwise null (pieces).
+  final String? unit;
+
+  /// The printed price of one piece or one kilo, in cents (only when it adds up to [price]).
+  final int? unitPrice;
+
+  const ReceiptItem._(this.name, this.price, this.qty, this.unit, this.unitPrice);
+
+  /// Keeps a quantity only when it makes sense (a bad one would spoil the price history).
+  /// Same rules as cleanItem in the web app's store.js.
+  factory ReceiptItem({required String name, required int price, num? qty, String? unit, int? unitPrice}) {
+    final q = qty?.toDouble();
+    if (q == null || !q.isFinite || q <= 0 || q > 999 || q == 1) return ReceiptItem._(name, price, null, null, null);
+    final rq = (q * 1000).round() / 1000;
+    final up = unitPrice != null && unitPrice > 0 && ((rq * unitPrice).round() - price).abs() <= 1 ? unitPrice : null;
+    return ReceiptItem._(name, price, rq, unit == 'kg' ? 'kg' : null, up);
+  }
+
+  factory ReceiptItem.fromJson(Map<String, dynamic> j) => ReceiptItem(
+    name: '${j['name'] ?? ''}',
+    price: _int(j['price']),
+    qty: j['qty'] is num ? j['qty'] as num : null,
+    unit: j['unit'] is String ? j['unit'] as String : null,
+    unitPrice: j['unitPrice'] is num ? (j['unitPrice'] as num).toInt() : null,
+  );
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'price': price,
+    if (qty != null) 'qty': _jsNumber(qty!),
+    if (unit != null) 'unit': unit,
+    if (unitPrice != null) 'unitPrice': unitPrice,
+  };
+
+  /// Price of one piece, or of one kilo, for comparing prices between shopping trips:
+  /// "2 x 0,59 = 1,18" is 0,59, "0,856 kg x 1,49 = 1,28" is 1,49.
+  int get perUnit {
+    final q = qty;
+    if (q == null) return price;
+    return unitPrice ?? (price / q).round();
+  }
+
+  ReceiptItem copyWith({String? name, int? price}) => ReceiptItem(
+    name: name ?? this.name,
+    price: price ?? this.price,
+    qty: qty,
+    unit: unit,
+    unitPrice: price == null || price == this.price ? unitPrice : null,
+  );
 
   @override
-  bool operator ==(Object other) => other is ReceiptItem && other.name == name && other.price == price;
+  bool operator ==(Object other) =>
+      other is ReceiptItem &&
+      other.name == name &&
+      other.price == price &&
+      other.qty == qty &&
+      other.unit == unit &&
+      other.unitPrice == unitPrice;
   @override
-  int get hashCode => Object.hash(name, price);
+  int get hashCode => Object.hash(name, price, qty, unit, unitPrice);
   @override
-  String toString() => '$name $price';
+  String toString() => '$name $price${qty != null ? ' ($qty${unit ?? ''}${unitPrice != null ? ' x $unitPrice' : ''})' : ''}';
 }
+
+/// 2.0 as 2, like JavaScript's JSON, so both apps write the same JSON.
+num _jsNumber(double d) => d == d.roundToDouble() ? d.toInt() : d;
 
 class Transaction {
   final String id;

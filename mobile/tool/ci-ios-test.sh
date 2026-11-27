@@ -4,14 +4,15 @@
 # the step times out). When nothing has started 6 minutes after the build, the simulator is
 # wiped and restarted and the tests run again (at most 3 tries).
 #
-#   mobile/tool/ci-ios-test.sh <simulator id> device-test.log
+#   mobile/tool/ci-ios-test.sh <simulator id> device-test.log [test file]
 set -uo pipefail
 SIM="$1"
 LOG="$2"
+TARGET="${3:-integration_test/app_test.dart}"
 RUN="$(mktemp)"
 for attempt in 1 2 3; do
   : > "$RUN"
-  flutter test integration_test/app_test.dart -d "$SIM" --reporter expanded > "$RUN" 2>&1 &
+  flutter test "$TARGET" -d "$SIM" --reporter expanded > "$RUN" 2>&1 &
   PID=$!
   tail -f "$RUN" & TAIL=$!
   built=""; stuck=""

@@ -116,8 +116,11 @@ class _EntryEditorState extends State<EntryEditor> {
         final g = categories().where((c) => c.name == 'Groceries').firstOrNull;
         if (g != null) draft.categoryId = g.id;
       }
+      final mm = draft.mismatch;
       readNote = n == 0
           ? 'No items found. Try a straighter photo with good light, or type them in.'
+          : mm != null
+          ? '⚠️ Found $n item${n == 1 ? '' : 's'}. They add up to ${model.money(mm.$1)}, but the receipt total is ${model.money(mm.$2)}: a price may be misread (or there is a discount). Check the prices.'
           : 'Found $n item${n == 1 ? '' : 's'}. Check them; tap to fix a name or price.';
     } catch (e) {
       readNote = 'Could not read the text. You can still type the items, and the photo is kept.';
@@ -394,16 +397,24 @@ class _EntryEditorState extends State<EntryEditor> {
 
   Widget _lineRow(BuildContext context, int i, dynamic store, Palette pal) {
     final (nameField, priceField) = lineFields[i];
-    final line = DraftLine(name: nameField.text, priceText: priceField.text);
+    final line = DraftLine(name: nameField.text, priceText: priceField.text, read: i < draft.lines.length ? draft.lines[i].read : null);
     final cmp = draft.comparison(line, ModelScope.of(context).store);
-    final money = ModelScope.of(context).money;
-    final (String text, Color color) = switch (cmp?.kind) {
+    final money0 = ModelScope.of(context).money;
+    String money(int c) => '${money0(c)}${cmp?.perKg == true ? '/kg' : ''}';
+    final it = line.item();
+    final q = it?.qty;
+    // "2 × 0,59 €" or "0,856 kg × 1,49 €/kg": what the comparison is about.
+    final qtyText = it == null || q == null
+        ? ''
+        : '${it.unit == 'kg' ? '${q.toString().replaceAll('.', ',')} kg ×' : '${q.round()} ×'} ${money0(it.perUnit)}${it.unit == 'kg' ? '/kg' : ''} · ';
+    final (String text0, Color color) = switch (cmp?.kind) {
       null => ('', pal.muted),
       'new' => ('First time', pal.muted),
       'same' => ('Same as ${shortDay(cmp!.date)} (${money(cmp.before)})', pal.muted),
       'up' => ('▲ +${pct(cmp!.percent)}% since ${shortDay(cmp.date)} (was ${money(cmp.before)})', pal.over),
       _ => ('▼ ${pct(cmp!.percent)}% since ${shortDay(cmp.date)} (was ${money(cmp.before)})', pal.income),
     };
+    final text = text0.isEmpty ? '' : '$qtyText$text0';
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Column(

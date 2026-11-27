@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Store, toCents, shiftMonth, normalizeItem, createInitialData } from '../store.js';
+import { Store, toCents, shiftMonth, normalizeItem, createInitialData, pricePerUnit, cleanItem } from '../store.js';
+import { rowToTx } from '../sync.js';
 import { parseReceipt } from '../receipt.js';
 
 class MemStorage { constructor() { this.m = {}; } getItem(k) { return this.m[k] ?? null; } setItem(k, v) { this.m[k] = String(v); } }
@@ -157,8 +158,8 @@ test('parses a Mercator-style receipt', () => {
   assert.deepEqual(parseReceipt(MERCATOR), [
     { name: 'MLEKO ALPSKO 3,5% 1L', price: 129 },
     { name: 'KRUH BELI 500G', price: 149 },
-    { name: 'JOGURT NAVADNI 180G', price: 178 },
-    { name: 'BANANE', price: 128 },
+    { name: 'JOGURT NAVADNI 180G', price: 178, qty: 2, unitPrice: 89 },
+    { name: 'BANANE', price: 128, qty: 0.856, unit: 'kg', unitPrice: 149 },
     { name: 'ČOKOLADA MILKA 100G', price: 159 },
   ]);
 });
@@ -178,7 +179,7 @@ test('parses a Lidl-style receipt with the weight line below the item', () => {
     { name: 'Jajca M 10/1', price: 249 },
     { name: 'Maslo 250g', price: 299 },
     { name: 'Testenine špageti', price: 89 },
-    { name: 'Paradižnik', price: 115 },
+    { name: 'Paradižnik', price: 115, qty: 0.62, unit: 'kg', unitPrice: 185 },
   ]);
 });
 
@@ -241,4 +242,60 @@ test('a chosen icon is kept to the database limit and saved with the category', 
   assert.equal(s.category(c.id).icon, '🐶');
   s.updateCategory(c.id, { icon: 'x'.repeat(40) });
   assert.ok(s.category(c.id).icon.length <= 16);
+});
+
+// ---- quantities: price tracking compares the price of one piece / one kilo ----
+test('quantity and weight lines give the price of one piece or one kilo', () => {
+  const items = parseReceipt(`JOGURT NAVADNI 180G
+  2 x 0,59                 1,18 C
+BANANE
+  1,020 kg x 1,47          1,50 C
+PIŠČANČJE PRSI
+  0,612 kg x 10,07         6,16 C
+SKUPAJ                     8,84`);
+  assert.deepEqual(items, [
+    { name: 'JOGURT NAVADNI 180G', price: 118, qty: 2, unitPrice: 59 },
+    { name: 'BANANE', price: 150, qty: 1.02, unit: 'kg', unitPrice: 147 },
+    { name: 'PIŠČANČJE PRSI', price: 616, qty: 0.612, unit: 'kg', unitPrice: 1007 },
+  ]);
+  assert.deepEqual(items.map(pricePerUnit), [59, 147, 1007]);
+});
+
+test('a misread quantity line keeps the quantity but not a price of one that does not add up', () => {
+  const [it] = parseReceipt('BANANE\n 0,856 kg x 7,49      1,28 C');
+  assert.deepEqual(it, { name: 'BANANE', price: 128, qty: 0.856, unit: 'kg' });
+  assert.equal(pricePerUnit(it), 150); // 1,28 / 0,856
+});
+
+test('a small l read as 1 in volumes is put back', () => {
+  const names = parseReceipt('Mleko pilos 3,5% 11   0,99 C\nRadenska 1,51   0,99 C\nOljčno olje 0,751  9,07 C\nOlje vita d\'or 11  1,94 C\nMASLO 1509   2,49 C').map((i) => i.name);
+  assert.deepEqual(names, ['Mleko pilos 3,5% 1l', 'Radenska 1,5l', 'Oljčno olje 0,75l', 'Olje vita d\'or 1l', 'MASLO 150G']);
+});
+
+test('price history and comparison use the price per piece / per kilo', () => {
+  const s = freshStore();
+  const P = 'sp_personal_tosve', G = catId(s, P, 'Groceries');
+  s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: 1, date: '2026-06-06', items: [{ name: 'BANANE', price: 72, qty: 0.483, unit: 'kg', unitPrice: 149 }, { name: 'Jogurt', price: 59 }] });
+  s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: 1, date: '2026-11-21', items: [{ name: 'Banane', price: 160, qty: 1.24, unit: 'kg', unitPrice: 129 }, { name: 'JOGURT', price: 138, qty: 2, unitPrice: 69 }] });
+  const h = s.itemHistory();
+  assert.deepEqual(h.get('banane').entries.map((e) => [e.price, e.unit]), [[149, 'kg'], [129, 'kg']]);
+  assert.deepEqual(h.get('jogurt').entries.map((e) => e.price), [59, 69]);
+  assert.deepEqual(s.previousPrice('banane', '2026-12-01'), { date: '2026-11-21', price: 129, unit: 'kg' });
+  // Stored as given (line total kept, so the bill still adds up).
+  assert.equal(s.data.transactions.at(-1).items[0].price, 160);
+});
+
+test('bad quantities are dropped instead of spoiling the price history', () => {
+  assert.deepEqual(cleanItem({ name: 'a', price: 100, qty: 0 }), { name: 'a', price: 100 });
+  assert.deepEqual(cleanItem({ name: 'a', price: 100, qty: 'x', unit: 'kg' }), { name: 'a', price: 100 });
+  assert.deepEqual(cleanItem({ name: 'a', price: 100, qty: 1, unit: 'kg' }), { name: 'a', price: 100 });
+  assert.deepEqual(cleanItem({ name: 'a', price: 100, qty: 2, unit: 'lb', unitPrice: 50 }), { name: 'a', price: 100, qty: 2, unitPrice: 50 });
+  // A price of one that doesn't add up (the total was corrected by hand) is worked out again.
+  assert.deepEqual(cleanItem({ name: 'a', price: 120, qty: 2, unitPrice: 50 }), { name: 'a', price: 120, qty: 2 });
+  assert.equal(pricePerUnit({ price: 120, qty: 2 }), 60);
+});
+
+test('quantities survive the trip through the cloud', () => {
+  const t = rowToTx({ id: 't', space_id: 's', category_id: 'c', kind: 'expense', amount: 150, date: '2026-11-21', items: [{ name: 'BANANE', price: 150, qty: 1.02, unit: 'kg', unitPrice: 147 }, { name: 'MLEKO', price: 119 }], created_at: '2026-11-21T10:00:00Z', updated_at: '2026-11-21T10:00:00Z' });
+  assert.deepEqual(t.items, [{ name: 'BANANE', price: 150, qty: 1.02, unit: 'kg', unitPrice: 147 }, { name: 'MLEKO', price: 119 }]);
 });

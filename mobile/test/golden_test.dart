@@ -17,11 +17,12 @@ dynamic json(String name) => jsonDecode(fixture(name));
 void main() {
   test('receipt parsing matches the web app on thousands of receipts', () {
     final cases = (json('receipts') as List).cast<Map>();
-    expect(cases.length, greaterThan(1000));
+    expect(cases.length, greaterThan(5000));
+    expect(cases.where((c) => (c['items'] as List).any((i) => (i as Map)['qty'] != null)).length, greaterThan(1000));
     final bad = <String>[];
     for (final c in cases) {
       final text = c['text'] as String;
-      final want = (c['items'] as List).map((i) => ReceiptItem(name: i['name'] as String, price: i['price'] as int)).toList();
+      final want = (c['items'] as List).map((i) => ReceiptItem.fromJson((i as Map).cast<String, dynamic>())).toList();
       final got = ReceiptParser.parse(text);
       if (!_listEq(got, want)) bad.add('ITEMS\n$text\nweb: $want\napp: $got');
       final gotTotal = ReceiptParser.findTotal(text);
@@ -94,6 +95,27 @@ void main() {
       final r = p['result'] as Map?;
       expect(got?.date, r?['date']);
       expect(got?.price, r?['price']);
+    }
+  });
+
+  test('price history per piece / per kilo matches the web app', () {
+    final f = json('quantities') as Map;
+    final raw = jsonEncode(f['data']);
+    final data = BudgetData.decode(raw);
+    expect(jsonDecode(data.encode()), jsonDecode(raw), reason: 'quantities are kept unchanged');
+    final store = BudgetStore(initial: data);
+    final history = store.itemHistory();
+    for (final h in (f['history'] as List).cast<Map>()) {
+      final g = history[h['key']]!;
+      expect(g.entries.map((e) => e.price).toList(), h['prices'], reason: h['key'] as String);
+      expect(g.entries.map((e) => e.unit).toList(), h['units'], reason: h['key'] as String);
+    }
+    for (final p in (f['previous'] as List).cast<Map>()) {
+      final got = store.previousPrice(p['name'] as String, p['before'] as String);
+      final r = p['result'] as Map?;
+      expect(got?.date, r?['date']);
+      expect(got?.price, r?['price']);
+      expect(got?.unit, r?['unit']);
     }
   });
 }

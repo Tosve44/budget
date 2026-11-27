@@ -53,7 +53,7 @@ class _PricesScreenState extends State<PricesScreen> {
             SectionCard(
               title: 'Grocery prices over time',
               children: [
-                const Muted('Newest first. The % is the change since the first time you bought it.'),
+                const Muted('Newest first. The % is the change since the first time you bought it, per piece or per kg.'),
                 const SizedBox(height: 6),
                 for (final g in groups) _row(context, g),
               ],
@@ -81,7 +81,7 @@ class _PricesScreenState extends State<PricesScreen> {
                   children: [
                     Text(g.name, overflow: TextOverflow.ellipsis),
                     Muted(
-                      '${g.entries.length}× · last ${shortDay(g.latest.date)}${prev != null ? ' · before ${model.money(prev.price)}' : ''}',
+                      '${g.entries.length}× · last ${shortDay(g.latest.date)}${prev != null ? ' · before ${model.money(prev.price)}${prev.unit == 'kg' ? '/kg' : ''}' : ''}',
                     ),
                   ],
                 ),
@@ -94,7 +94,11 @@ class _PricesScreenState extends State<PricesScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(model.money(g.latest.price), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    '${model.money(g.latest.price)}${g.latest.unit == 'kg' ? '/kg' : ''}',
+                    key: const Key('priceLatest'),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   ChangeBadge(percent: g.changeSinceFirst, single: g.entries.length == 1),
                 ],
               ),
@@ -161,7 +165,7 @@ class PriceDetail extends StatelessWidget {
                   child: Row(
                     children: [
                       Expanded(child: Text(dayLabel(e.date))),
-                      Text(model.money(e.price)),
+                      Text('${model.money(e.price)}${e.unit == 'kg' ? '/kg' : ''}'),
                     ],
                   ),
                 ),

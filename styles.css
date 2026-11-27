@@ -228,6 +228,9 @@ button.stat:active { background: var(--accent-soft); }
 .item-price { text-align: right; font-variant-numeric: tabular-nums; }
 .item-cmp { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; font-size: 0.765rem; color: var(--muted); }
 .item-cmp:empty { display: none; }
+.item-cmp .item-qty { color: var(--text); font-weight: 600; }
+#ocrStatus.warn { color: var(--text); font-weight: 600; }
+#ocrStatus.warn::before { content: "⚠️ "; }
 .items-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .badge { display: inline-block; border-radius: 99px; padding: 1px 8px; font-size: 0.706rem; font-weight: 600; white-space: nowrap; }
 .badge.up { background: color-mix(in srgb, var(--over) 16%, transparent); color: var(--over); }

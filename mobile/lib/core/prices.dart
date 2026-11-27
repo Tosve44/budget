@@ -9,11 +9,24 @@ export 'premium.dart' show Plan, PlanRules;
 
 class PricePoint {
   final String date;
+
+  /// Price of one piece or one kilo (see [ReceiptItem.perUnit]), so buying two, or a bigger
+  /// bunch of bananas, does not look like a price rise.
   final int price;
+
+  /// "kg" when [price] is per kilo.
+  final String? unit;
   final String txId;
   final String spaceId;
   final String createdAt;
-  const PricePoint({required this.date, required this.price, required this.txId, required this.spaceId, required this.createdAt});
+  const PricePoint({
+    required this.date,
+    required this.price,
+    this.unit,
+    required this.txId,
+    required this.spaceId,
+    required this.createdAt,
+  });
 }
 
 class PriceGroup {
@@ -53,7 +66,9 @@ class PriceHistory {
         final key = normalize(it.name);
         if (key.isEmpty) continue;
         map.putIfAbsent(key, () => PriceGroup(key, it.name, []));
-        map[key]!.entries.add(PricePoint(date: t.date, price: it.price, txId: t.id, spaceId: t.spaceId, createdAt: t.createdAt));
+        map[key]!.entries.add(
+          PricePoint(date: t.date, price: it.perUnit, unit: it.unit, txId: t.id, spaceId: t.spaceId, createdAt: t.createdAt),
+        );
       }
     }
     for (final g in map.values) {
@@ -78,7 +93,7 @@ class PriceHistory {
       if (t.id == excluding || t.date.compareTo(before) > 0) continue;
       for (final it in t.items ?? const <ReceiptItem>[]) {
         if (normalize(it.name) == key && (best == null || t.date.compareTo(best.date) >= 0)) {
-          best = PricePoint(date: t.date, price: it.price, txId: t.id, spaceId: t.spaceId, createdAt: t.createdAt);
+          best = PricePoint(date: t.date, price: it.perUnit, unit: it.unit, txId: t.id, spaceId: t.spaceId, createdAt: t.createdAt);
         }
       }
     }

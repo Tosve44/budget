@@ -134,7 +134,17 @@ class CloudRows {
     if (id is! String || sp is! String || cat is! String || kind == null || date is! String) return null;
     final items = <ReceiptItem>[];
     for (final i in (r['items'] is List ? r['items'] as List : const [])) {
-      if (i is Map && i['name'] is String) items.add(ReceiptItem(name: i['name'] as String, price: asInt(i['price'])));
+      if (i is Map && i['name'] is String) {
+        items.add(
+          ReceiptItem(
+            name: i['name'] as String,
+            price: asInt(i['price']),
+            qty: i['qty'] is num ? i['qty'] as num : null,
+            unit: i['unit'] is String ? i['unit'] as String : null,
+            unitPrice: i['unitPrice'] is num ? (i['unitPrice'] as num).toInt() : null,
+          ),
+        );
+      }
     }
     final path = r['receipt_path'];
     return Transaction(

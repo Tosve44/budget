@@ -1,4 +1,4 @@
-import { Store, LIMITS, categoryIcon, ICON_CHOICES, toCents, monthKey, todayKey, shiftMonth, uid, normalizeItem } from './store.js';
+import { Store, LIMITS, categoryIcon, ICON_CHOICES, toCents, monthKey, todayKey, shiftMonth, uid, normalizeItem, pricePerUnit, cleanItem } from './store.js';
 import { putPhoto, getPhoto, deletePhoto, compressImage } from './photos.js';
 import { readReceiptText, parseReceipt, findTotal } from './receipt.js';
 import { startCloud, loadPhoto } from './cloud.js';
@@ -413,7 +413,9 @@ function openTxSheet(tx, preset = {}) {
     const cmpHtml = (it) => {
       if (!it.name || !it.price) return '';
       const prev = store.previousPrice(it.name, $('#date', root).value || todayKey(), tx?.id);
-      return `${changeBadge(prev ? pctChange(it.price, prev.price) : null)}${prev ? `<small>was ${money(prev.price)} on ${esc(dayLabel(prev.date))}</small>` : ''}`;
+      const per = it.unit === 'kg' ? '/kg' : '';
+      const qty = it.qty ? `<small class="item-qty">${it.unit === 'kg' ? `${String(it.qty).replace('.', ',')} kg` : `${it.qty} ×`} ${money(pricePerUnit(it))}${per}</small>` : '';
+      return `${qty}${changeBadge(prev ? pctChange(pricePerUnit(it), prev.price) : null)}${prev ? `<small>was ${money(prev.price)}${prev.unit === 'kg' ? '/kg' : ''} on ${esc(dayLabel(prev.date))}</small>` : ''}`;
     };
     const itemsTotal = () => items.reduce((s, it) => s + (it.price || 0), 0);
     const paintItems = () => {
@@ -434,7 +436,11 @@ function openTxSheet(tx, preset = {}) {
         const i = Number(inp.dataset.i);
         inp.addEventListener('input', () => {
           if (inp.dataset.f === 'name') items[i].name = inp.value.trim();
-          else { const c = toCents(inp.value); items[i].price = Number.isFinite(c) ? c : 0; }
+          else {
+            const c = toCents(inp.value);
+            items[i].price = Number.isFinite(c) ? c : 0;
+            delete items[i].unitPrice; // the printed price of one no longer matches: work it out from the total
+          }
           // Update the comparison while typing, so nothing jumps around when the field loses focus.
           $(`[data-cmp="${i}"]`, itemsWrap).innerHTML = cmpHtml(items[i]);
           $('#itemsTotal', itemsWrap).textContent = money(itemsTotal());
@@ -485,9 +491,16 @@ function openTxSheet(tx, preset = {}) {
         const found = parseReceipt(text);
         if (found.length) {
           items = found;
-          status.textContent = `Found ${found.length} items. Check names and prices, then save.`;
           // Prefer the printed total (it includes discounts); otherwise add up the items.
-          const total = findTotal(text) || found.reduce((s, it) => s + it.price, 0);
+          const printed = findTotal(text);
+          const sum = found.reduce((s, it) => s + it.price, 0);
+          const total = printed || sum;
+          // A misread digit (5 as 9, 1 as 7) would show up later as a fake price jump, so say
+          // when the items don't add up to the printed total.
+          status.textContent = printed && printed !== sum
+            ? `Found ${found.length} items. They add up to ${money(sum)}, but the receipt total is ${money(printed)}: a price may be misread (or there is a discount). Check the prices, then save.`
+            : `Found ${found.length} items. Check names and prices, then save.`;
+          status.classList.toggle('warn', !!printed && printed !== sum);
           if (!$('#amount', root).value) $('#amount', root).value = centsToInput(total);
         } else {
           status.textContent = 'Could not find item lines. You can add items by hand.';
@@ -509,7 +522,7 @@ function openTxSheet(tx, preset = {}) {
       if (!categoryId) { toast('Pick a category'); return; }
       if (!date) { toast('Pick a date'); return; }
       saving = true;
-      const cleanItems = kind === 'expense' ? items.filter((it) => it.name && it.price > 0).map((it) => ({ name: it.name, price: it.price })) : [];
+      const cleanItems = kind === 'expense' ? items.filter((it) => it.name && it.price > 0).map((it) => cleanItem({ name: it.name, price: it.price, qty: it.qty, unit: it.unit, unitPrice: it.unitPrice })) : [];
       if (newPhoto) {
         try {
           await putPhoto(newPhoto.id, newPhoto.blob);
@@ -560,17 +573,17 @@ function renderPrices() {
     const open = state.openItem === g.key;
     return `<li class="price-row"><button data-item="${esc(g.key)}">
         <div class="price-main"><div class="tx-cat">${esc(g.name)}</div>
-          <div class="tx-meta">${g.entries.length}× · ${esc(dayLabel(last.date))}${prev ? ` · before ${money(prev.price)}` : ''}</div></div>
+          <div class="tx-meta">${g.entries.length}× · ${esc(dayLabel(last.date))}${prev ? ` · before ${money(prev.price)}${prev.unit === 'kg' ? '/kg' : ''}` : ''}</div></div>
         ${spark(g.entries)}
-        <div class="price-right"><div class="tx-amt">${money(last.price)}</div>${g.entries.length > 1 ? changeBadge(sinceFirst) : ''}</div>
+        <div class="price-right"><div class="tx-amt">${money(last.price)}${last.unit === 'kg' ? '<small>/kg</small>' : ''}</div>${g.entries.length > 1 ? changeBadge(sinceFirst) : ''}</div>
       </button>
-      ${open ? `<ul class="price-hist">${g.entries.slice().reverse().map((e) => `<li><span>${esc(dayLabel(e.date))}</span><span>${money(e.price)}</span></li>`).join('')}</ul>` : ''}
+      ${open ? `<ul class="price-hist">${g.entries.slice().reverse().map((e) => `<li><span>${esc(dayLabel(e.date))}</span><span>${money(e.price)}${e.unit === 'kg' ? '/kg' : ''}</span></li>`).join('')}</ul>` : ''}
     </li>`;
   }).join('');
 
   view.innerHTML = `
     <section class="card"><h2>Grocery prices over time</h2>
-      <p class="note" style="margin:0 0 10px">Every item from your receipts, newest first. The % is the change since the first time you bought it. Tap an item for its history.</p>
+      <p class="note" style="margin:0 0 10px">Every item from your receipts, newest first. The % is the change since the first time you bought it, per piece or per kg. Tap an item for its history.</p>
       <label class="field"><input id="priceSearch" type="search" aria-label="Search items" placeholder="Search items" value="${esc(state.priceQuery || '')}"></label>
       ${rows ? `<ul class="tx-list">${rows}</ul>` : '<p class="empty-note">No items yet. Add a receipt photo to an expense and the items will show up here.</p>'}
     </section>`;

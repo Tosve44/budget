@@ -333,7 +333,7 @@ class DemoData {
       kind: EntryKind.expense,
       amount: 4550,
       date: '$month-01',
-      items: const [
+      items: [
         ReceiptItem(name: 'MLEKO ALPSKO 3,5% 1L', price: 119),
         ReceiptItem(name: 'KRUH BELI 500G', price: 149),
       ],

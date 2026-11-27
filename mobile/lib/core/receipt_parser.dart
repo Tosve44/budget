@@ -37,6 +37,10 @@ class ReceiptParser {
   static final _quantityOnly = RegExp(r'^[\d.,]+\s*(kom|kg|g|l|pcs|st)?\s*[x×*]\s*[\d.,]+', caseSensitive: false);
   static final _twoLetters = RegExp(r'\p{L}{2,}', unicode: true);
   static final _gramMisread = RegExp(r'\b(\d*[1-9]0{1,2})[69]\b');
+  static final _litreDecimal = RegExp(r'\b(\d,\d{1,2})1\b');
+  static final _litreAfterPercent = RegExp(r'(%\s?)11\b');
+  static final _litreAtEnd = RegExp(r'\b11$');
+  static final _quantity = RegExp(r'^([\d.,]+)\s*(kom|kos|kg|g|pcs|st)?\.?\s*[x×*]\s*([\d.,]+)', caseSensitive: false);
 
   /// JavaScript's String.prototype.trim.
   static String jsTrim(String s) => s.replaceAll(_trim, '');
@@ -45,11 +49,37 @@ class ReceiptParser {
 
   static int? _cents(String priceText) => Money.cents(priceText.replaceAll(_semi, ',').replaceAll(' ', ''));
 
-  /// Common misreads in product names: "500G" read as "5006", "150g" as "1509".
+  /// Common misreads in product names: "500G" read as "5006", "150g" as "1509", and a small
+  /// "l" (litre) read as "1": "1,5l" as "1,51", "0,75l" as "0,751", "3,5% 1l" as "3,5% 11".
   static String fixName(String name) {
     final upper = name == name.toUpperCase();
-    return name.replaceAllMapped(_gramMisread, (m) => '${m[1]}${upper ? 'G' : 'g'}');
+    var n = name.replaceAllMapped(_gramMisread, (m) => '${m[1]}${upper ? 'G' : 'g'}');
+    if (!upper) {
+      n = n
+          .replaceAllMapped(_litreDecimal, (m) => '${m[1]}l')
+          .replaceAllMapped(_litreAfterPercent, (m) => '${m[1]}1l')
+          .replaceFirst(_litreAtEnd, '1l');
+    }
+    return n;
   }
+
+  /// "2 x 0,59", "0,856 kg x 1,49", "350 g x 12,99": how many (or how much) and the price of
+  /// one (or of a kilo). null when the line doesn't say.
+  static ({double qty, String? unit, int? unitPrice})? readQuantity(String text) {
+    final m = _quantity.firstMatch(text);
+    if (m == null) return null;
+    var qty = double.tryParse(m[1]!.replaceFirst(',', '.'));
+    if (qty == null) return null;
+    final unitWord = (m[2] ?? '').toLowerCase();
+    if (unitWord == 'g') qty /= 1000;
+    if (!(qty > 0) || qty > 999 || qty == 1) return null;
+    final byWeight = unitWord == 'kg' || unitWord == 'g' || qty != qty.roundToDouble();
+    final each = Money.cents(m[3]!.replaceAll(_semi, ','));
+    return (qty: (qty * 1000).round() / 1000, unit: byWeight ? 'kg' : null, unitPrice: each != null && each > 0 ? each : null);
+  }
+
+  static ReceiptItem _withQuantity(ReceiptItem it, ({double qty, String? unit, int? unitPrice}) a) =>
+      ReceiptItem(name: it.name, price: it.price, qty: a.qty, unit: a.unit, unitPrice: a.unitPrice);
 
   /// The receipt's grand total ("SKUPAJ", "ZA PLAČILO", "TOTAL"...), which already includes
   /// discounts. When several lines qualify, the largest amount wins. null if none is printed.
@@ -68,6 +98,7 @@ class ReceiptParser {
   /// Product lines with their prices, in the order they are printed.
   static List<ReceiptItem> parse(String text) {
     final items = <ReceiptItem>[];
+    final at = <int>[]; // the line of each item
     final lines = _lines(text).where((l) => l.isNotEmpty).toList();
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
@@ -81,10 +112,12 @@ class ReceiptParser {
       // Quantity lines like "2 x 1,29" or "0,750 kg x 199,99": the product name is usually on the line above.
       final qtyOnly = _quantityOnly.hasMatch(name);
       if (!qtyOnly && !_twoLetters.hasMatch(name)) continue; // e.g. a date and time "25.11.2026 10:15"
+      ({double qty, String? unit, int? unitPrice})? amount;
       if (qtyOnly) {
         final prev = i > 0 ? lines[i - 1] : null;
         final above = prev != null && !_priceAtEnd.hasMatch(prev) && !_skip.hasMatch(prev) ? prev : null;
         if (above != null && _twoLetters.hasMatch(above)) {
+          amount = readQuantity(name);
           name = above;
         } else {
           continue;
@@ -92,7 +125,27 @@ class ReceiptParser {
       }
       name = jsTrim(name.replaceAll(_junk, ' ').replaceAll(_spaces, ' ').replaceFirst(_leadingNumbers, ''));
       if (name.length < 2) continue;
-      items.add(ReceiptItem(name: fixName(name), price: price));
+      final item = ReceiptItem(name: fixName(name), price: price);
+      items.add(amount == null ? item : _withQuantity(item, amount));
+      at.add(i);
+    }
+    // Other layouts put the quantity on its own line, without the line total: below the product
+    // ("Paradižnik 1,15" then "0,620 kg x 1,85 EUR/kg", Lidl) or above it ("2 x 0,89" then
+    // "JOGURT 1,78", Mercator). Used when the numbers agree with that product's line total.
+    for (var i = 0; i < lines.length; i++) {
+      if (at.contains(i) || _skip.hasMatch(lines[i])) continue;
+      final a = readQuantity(lines[i]);
+      final each = a?.unitPrice;
+      if (a == null || each == null) continue;
+      for (final j in [i - 1, i + 1]) {
+        final k = at.indexOf(j);
+        if (k < 0) continue;
+        final it = items[k];
+        if (it.qty == null && ((a.qty * each).round() - it.price).abs() <= 1) {
+          items[k] = _withQuantity(it, a);
+          break;
+        }
+      }
     }
     return items;
   }
