@@ -369,6 +369,7 @@ class EntryRow extends StatelessWidget {
     final items = entry.items;
     final meta = [
       dayLabel(entry.date),
+      if (entry.store.isNotEmpty) entry.store,
       if (items != null && items.isNotEmpty) '🧾 ${items.length} items' else if (entry.receiptId != null) '🧾',
       if (entry.note.isNotEmpty) entry.note,
       if (showWho && store.user(entry.createdBy) != null) store.user(entry.createdBy)!.name,

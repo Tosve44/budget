@@ -437,6 +437,60 @@ void main() {
   );
 
   test(
+    'the shop on a receipt and its quantities go to the other phone; a database without the store column still syncs',
+    () async {
+      // The database has transactions.store (the migration ran), unless STORE_COLUMN=no.
+      final hasColumn = env['STORE_COLUMN'] != 'no';
+      final t = Phone(), m = Phone();
+      await t.sync.signUp(email('shop-t'), 'secret123');
+      final code = await t.sync.createHousehold('Tosve');
+      await m.sync.signUp(email('shop-m'), 'secret456');
+      await m.sync.joinHousehold(code, 'Milica');
+
+      final e = t.store.addTransaction(
+        spaceId: t.house.id,
+        categoryId: t.cat(t.house, 'Groceries').id,
+        kind: EntryKind.expense,
+        amount: 268,
+        date: '2026-11-21',
+        store: '  Lidl ',
+        items: [
+          ReceiptItem(name: 'Banane', price: 150, qty: 1.02, unit: 'kg', unitPrice: 147),
+          ReceiptItem(name: 'Jogurt', price: 118, qty: 2, unitPrice: 59),
+        ],
+      );
+      expect(e.store, 'Lidl');
+      await t.sync.syncNow();
+      expect(t.sync.pendingCount, 0, reason: 'nothing stuck because of the shop');
+      expect(t.sync.noStoreColumn, !hasColumn);
+      await m.sync.syncNow();
+      final got = m.entry(e.id)!;
+      // Quantities always arrive, so the other phone shows the same price per kilo / per piece.
+      expect(got.items!.map((i) => i.perUnit).toList(), [147, 59]);
+      expect(got.items!.first.unit, 'kg');
+      expect(t.entry(e.id)!.store, 'Lidl');
+      if (hasColumn) {
+        expect(got.store, 'Lidl');
+        // A corrected shop goes back.
+        m.store.updateTransaction(e.id, (x) => x.store = 'Hofer');
+        await m.sync.syncNow();
+        await t.sync.syncNow();
+        expect(t.entry(e.id)!.store, 'Hofer');
+      } else {
+        expect(got.store, '', reason: 'no shop in the cloud yet');
+        // A later sync, after another change, still does not lose the shop here.
+        t.store.updateTransaction(e.id, (x) => x.note = 'weekly shop');
+        await t.sync.syncNow();
+        await m.sync.syncNow();
+        expect(m.entry(e.id)!.note, 'weekly shop');
+        expect(t.entry(e.id)!.store, 'Lidl');
+      }
+    },
+    skip: skip,
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
+
+  test(
     'category icons go to the other phone; a database without the icon column still syncs',
     () async {
       // The database has categories.icon (the migration ran), unless ICON_COLUMN=no.

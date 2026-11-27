@@ -195,6 +195,7 @@ class BudgetStore {
     String note = '',
     List<ReceiptItem>? items,
     String? receiptId,
+    String store = '',
   }) {
     final ts = _ts();
     final t = Transaction(
@@ -210,6 +211,7 @@ class BudgetStore {
       updatedAt: ts,
       receiptId: receiptId,
       items: (items == null || items.isEmpty) ? null : _cleanItems(items),
+      store: Limits.clip(store.trim(), Limits.store),
     );
     data.transactions.add(t);
     _changed(SyncTable.transactions, t.id);
@@ -225,6 +227,7 @@ class BudgetStore {
     change(t);
     if (t.items != null) t.items = t.items!.isEmpty ? null : _cleanItems(t.items!);
     t.note = Limits.clip(t.note, Limits.note);
+    t.store = Limits.clip(t.store.trim(), Limits.store);
     t.updatedAt = _ts();
     _changed(SyncTable.transactions, id);
     save();

@@ -58,6 +58,12 @@ void main() {
     expect(groups['paradiznik']!.changeSinceFirst, 75.9);
     expect(groups['piscancje prsi']!.changeSinceFirst, 14.3);
     expect(groups['alpsko mleko 3 5% 1l']!.changeSinceFirst, 0);
+    // Every shop read from its receipt; the % on Prices is between purchases at the same shop.
+    expect(run.shopsRight, priceReceipts.length);
+    expect(PriceHistory.stores(groups.values), ['Hofer', 'Lidl', 'Mercator', 'Spar', 'Tuš']);
+    expect((groups['banane']!.trend().store, groups['banane']!.trend().change), ('Mercator', -13.4));
+    expect((groups['paradiznik']!.trend().store, groups['paradiznik']!.trend().change), ('Spar', 43.4));
+    expect((groups['kruh beli 500g']!.trend().store, groups['kruh beli 500g']!.trend().change), ('Mercator', 20.1));
     await checkPricesScreen(tester, run.model, shot: shot);
   });
 }

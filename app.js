@@ -1,6 +1,6 @@
-import { Store, LIMITS, categoryIcon, ICON_CHOICES, toCents, monthKey, todayKey, shiftMonth, uid, normalizeItem, pricePerUnit, cleanItem } from './store.js';
+import { Store, LIMITS, categoryIcon, ICON_CHOICES, toCents, monthKey, todayKey, shiftMonth, uid, normalizeItem, pricePerUnit, cleanItem, storeTrend, sameStore } from './store.js';
 import { putPhoto, getPhoto, deletePhoto, compressImage } from './photos.js';
-import { readReceiptText, parseReceipt, findTotal } from './receipt.js';
+import { readReceiptText, parseReceipt, findTotal, findStore } from './receipt.js';
 import { startCloud, loadPhoto } from './cloud.js';
 
 const store = new Store();
@@ -139,7 +139,7 @@ function renderSpace(space) {
   const showWho = space.type === 'house';
   const txRows = txs.map((t) => {
     const c = store.category(t.categoryId);
-    const meta = [dayLabel(t.date), t.items?.length ? `🧾 ${t.items.length} items` : (t.receiptId ? '🧾' : null), t.note, showWho ? store.user(t.createdBy)?.name : null].filter(Boolean).map(esc).join(' · ');
+    const meta = [dayLabel(t.date), t.store, t.items?.length ? `🧾 ${t.items.length} items` : (t.receiptId ? '🧾' : null), t.note, showWho ? store.user(t.createdBy)?.name : null].filter(Boolean).map(esc).join(' · ');
     return `<li class="tx"><button data-tx="${esc(t.id)}">
       <div class="tx-main"><div class="tx-cat">${c ? ico(c) : ''}${esc(c ? c.name : 'Deleted category')}</div><div class="tx-meta">${meta}</div></div>
       <div class="tx-amt ${t.kind === 'income' ? 'income' : ''}">${t.kind === 'income' ? '+' : '−'}${money(t.amount)}</div>
@@ -385,6 +385,7 @@ function openTxSheet(tx, preset = {}) {
       <label class="field"><span>Note</span><input id="note" maxlength="${LIMITS.note}" placeholder="Optional" value="${tx ? esc(tx.note) : ''}"></label>
     </div>
     <div id="receiptBox" class="receipt-box">
+      <label class="field shop-field"><span>Shop</span><input id="shop" list="shopNames" maxlength="${LIMITS.store}" placeholder="Read from the receipt, or type it" value="${tx ? esc(tx.store || '') : ''}" autocomplete="off"></label>
       <div class="receipt-top">
         <label class="secondary receipt-btn">📷 <span id="photoLabel">Add receipt photo</span><input type="file" id="photoInput" accept="image/*" hidden></label>
         <img id="thumb" class="thumb" alt="Receipt" hidden>
@@ -392,6 +393,7 @@ function openTxSheet(tx, preset = {}) {
       <p class="note" id="ocrStatus" hidden></p>
       <div id="itemsWrap"></div>
     </div>
+    <datalist id="shopNames">${[...new Set(['Mercator', 'Spar', 'Lidl', 'Hofer', 'Tuš', 'Eurospin', 'Jager', ...store.data.transactions.map((t) => t.store).filter(Boolean)])].map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
     <datalist id="itemNames">${[...store.itemHistory().values()].map((g) => `<option value="${esc(g.name)}">`).join('')}</datalist>
     <button class="primary" id="saveTx2">Save</button>
     ${tx ? '<button class="secondary danger" id="delTx">Delete entry</button>' : ''}
@@ -412,7 +414,9 @@ function openTxSheet(tx, preset = {}) {
     const itemsWrap = $('#itemsWrap', root);
     const cmpHtml = (it) => {
       if (!it.name || !it.price) return '';
-      const prev = store.previousPrice(it.name, $('#date', root).value || todayKey(), tx?.id);
+      const shop = $('#shop', root).value.trim();
+      const prev = store.previousPrice(it.name, $('#date', root).value || todayKey(), tx?.id, shop);
+      const elsewhere = prev?.store && shop && !sameStore(prev.store, shop) ? ` at ${esc(prev.store)}` : '';
       const per = it.unit === 'kg' ? '/kg' : '';
       const each = pricePerUnit(it);
       const amount = it.unit === 'kg' ? `${String(it.qty).replace('.', ',')} kg ×` : `${it.qty} ×`;
@@ -421,7 +425,7 @@ function openTxSheet(tx, preset = {}) {
         return `<small class="item-qty">⚠️ ${amount} ${money(it.unitPrice)}${per} is not ${money(it.price)}. Check this price; until it adds up, this line is left out of the price history.</small>`;
       }
       const qty = it.qty ? `<small class="item-qty">${amount} ${money(each)}${per}</small>` : '';
-      return `${qty}${changeBadge(prev ? pctChange(each, prev.price) : null)}${prev ? `<small>was ${money(prev.price)}${prev.unit === 'kg' ? '/kg' : ''} on ${esc(dayLabel(prev.date))}</small>` : ''}`;
+      return `${qty}${changeBadge(prev ? pctChange(each, prev.price) : null)}${prev ? `<small>was ${money(prev.price)}${prev.unit === 'kg' ? '/kg' : ''}${elsewhere} on ${esc(dayLabel(prev.date))}</small>` : ''}`;
     };
     const itemsTotal = () => items.reduce((s, it) => s + (it.price || 0), 0);
     const paintItems = () => {
@@ -461,6 +465,7 @@ function openTxSheet(tx, preset = {}) {
     };
     paintItems();
     $('#date', root).addEventListener('change', paintItems);
+    $('#shop', root).addEventListener('change', paintItems);
 
     const thumb = $('#thumb', root);
     const showThumb = (blob) => {
@@ -494,6 +499,8 @@ function openTxSheet(tx, preset = {}) {
         });
         console.debug('Receipt text:', text);
         const found = parseReceipt(text);
+        const shop = findStore(text);
+        if (shop && !$('#shop', root).value.trim()) $('#shop', root).value = shop;
         if (found.length) {
           items = found;
           // Prefer the printed total (it includes discounts); otherwise add up the items.
@@ -536,7 +543,8 @@ function openTxSheet(tx, preset = {}) {
         } catch { toast('Could not save the photo'); }
       }
       const payload = { spaceId: space.id, categoryId, kind, amount, date, note: $('#note', root).value.trim() };
-      if (kind === 'expense') { payload.items = cleanItems; payload.receiptId = receiptId; }
+      if (kind === 'expense') { payload.items = cleanItems; payload.receiptId = receiptId; payload.store = $('#shop', root).value.trim(); }
+      else if (tx?.store) payload.store = '';
       let msg = tx ? 'Saved' : 'Added';
       if (tx && !store.updateTransaction(tx.id, payload)) {
         // The other phone deleted this entry while it was open here: keep this person's edit.
@@ -559,9 +567,16 @@ function openTxSheet(tx, preset = {}) {
 }
 
 function renderPrices() {
-  const groups = [...store.itemHistory().values()];
+  const all = [...store.itemHistory().values()];
+  // Shops seen on receipts. Prices differ from shop to shop, so each % is worked out between
+  // purchases at the same shop; the chips show one shop only.
+  const shops = [...new Map(all.flatMap((g) => g.entries).filter((e) => e.store).map((e) => [normalizeItem(e.store), e.store])).values()].sort((a, b) => a.localeCompare(b));
+  if (state.priceStore && !shops.some((s) => sameStore(s, state.priceStore))) state.priceStore = null;
+  const pick = state.priceStore;
   const q = normalizeItem(state.priceQuery || '');
-  const shown = groups.filter((g) => !q || g.key.includes(q))
+  const shown = all
+    .map((g) => ({ ...g, entries: pick ? g.entries.filter((e) => sameStore(e.store, pick)) : g.entries }))
+    .filter((g) => g.entries.length && (!q || g.key.includes(q)))
     .sort((a, b) => b.entries.at(-1).date.localeCompare(a.entries.at(-1).date));
 
   const spark = (entries) => {
@@ -571,25 +586,30 @@ function renderPrices() {
     const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${max === min ? h / 2 : h - ((v - min) / (max - min)) * (h - 4) - 2}`).join(' ');
     return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
   };
+  const kg = (e) => (e.unit === 'kg' ? '/kg' : '');
 
   const rows = shown.map((g) => {
-    const first = g.entries[0], last = g.entries.at(-1), prev = g.entries.at(-2);
-    const sinceFirst = g.entries.length > 1 ? pctChange(last.price, first.price) : null;
+    const tr = storeTrend(g.entries); // at the shop of the newest purchase
+    const last = tr.last, prev = tr.entries.at(-2);
     const open = state.openItem === g.key;
     return `<li class="price-row"><button data-item="${esc(g.key)}">
         <div class="price-main"><div class="tx-cat">${esc(g.name)}</div>
-          <div class="tx-meta">${g.entries.length}× · ${esc(dayLabel(last.date))}${prev ? ` · before ${money(prev.price)}${prev.unit === 'kg' ? '/kg' : ''}` : ''}</div></div>
-        ${spark(g.entries)}
-        <div class="price-right"><div class="tx-amt">${money(last.price)}${last.unit === 'kg' ? '<small>/kg</small>' : ''}</div>${g.entries.length > 1 ? changeBadge(sinceFirst) : ''}</div>
+          <div class="tx-meta">${tr.store ? `${esc(tr.store)} · ` : ''}${tr.entries.length}× · ${esc(dayLabel(last.date))}${prev ? ` · before ${money(prev.price)}${kg(prev)}` : ''}</div></div>
+        ${spark(tr.entries)}
+        <div class="price-right"><div class="tx-amt">${money(last.price)}${last.unit === 'kg' ? '<small>/kg</small>' : ''}</div>${g.entries.length > 1 ? changeBadge(tr.change) : ''}</div>
       </button>
-      ${open ? `<ul class="price-hist">${g.entries.slice().reverse().map((e) => `<li><span>${esc(dayLabel(e.date))}</span><span>${money(e.price)}${e.unit === 'kg' ? '/kg' : ''}</span></li>`).join('')}</ul>` : ''}
+      ${open ? `<ul class="price-hist">${g.entries.slice().reverse().map((e) => `<li><span>${esc(dayLabel(e.date))}${e.store ? ` · ${esc(e.store)}` : ''}</span><span>${money(e.price)}${kg(e)}</span></li>`).join('')}</ul>` : ''}
     </li>`;
   }).join('');
 
   view.innerHTML = `
     <section class="card"><h2>Grocery prices over time</h2>
-      <p class="note" style="margin:0 0 10px">Every item from your receipts, newest first. The % is the change since the first time you bought it, per piece or per kg. Tap an item for its history.</p>
+      <p class="note" style="margin:0 0 10px">Every item from your receipts, newest first. The % is the change since the first time you bought it at the same shop, per piece or per kg. Tap an item for its history.</p>
       <label class="field"><input id="priceSearch" type="search" aria-label="Search items" placeholder="Search items" value="${esc(state.priceQuery || '')}"></label>
+      ${shops.length ? `<div class="chips shop-chips" role="group" aria-label="Shop">
+        <button type="button" class="chip${pick ? '' : ' on'}" data-shop="" aria-pressed="${!pick}">All shops</button>
+        ${shops.map((s) => `<button type="button" class="chip${pick && sameStore(s, pick) ? ' on' : ''}" data-shop="${esc(s)}" aria-pressed="${!!pick && sameStore(s, pick)}">${esc(s)}</button>`).join('')}
+      </div>` : ''}
       ${rows ? `<ul class="tx-list">${rows}</ul>` : '<p class="empty-note">No items yet. Add a receipt photo to an expense and the items will show up here.</p>'}
     </section>`;
   const search = $('#priceSearch');
@@ -598,6 +618,10 @@ function renderPrices() {
     renderPrices();
     const s2 = $('#priceSearch'); s2.focus(); s2.setSelectionRange(s2.value.length, s2.value.length);
   });
+  view.querySelectorAll('[data-shop]').forEach((b) => b.addEventListener('click', () => {
+    state.priceStore = b.dataset.shop || null;
+    renderPrices();
+  }));
   view.querySelectorAll('[data-item]').forEach((b) => b.addEventListener('click', () => {
     state.openItem = state.openItem === b.dataset.item ? null : b.dataset.item;
     renderPrices();

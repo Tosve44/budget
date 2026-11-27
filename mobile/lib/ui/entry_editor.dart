@@ -6,6 +6,7 @@ import '../core/models.dart';
 import '../core/money.dart';
 import '../core/premium.dart';
 import '../core/prices.dart';
+import '../core/store.dart';
 import 'home.dart';
 import 'premium_screen.dart';
 import 'widgets.dart';
@@ -26,6 +27,7 @@ class _EntryEditorState extends State<EntryEditor> {
   late final EntryDraft draft;
   final amount = TextEditingController();
   final note = TextEditingController();
+  final shop = TextEditingController();
   final List<(TextEditingController, TextEditingController)> lineFields = [];
   String? problem;
   bool reading = false;
@@ -43,6 +45,7 @@ class _EntryEditorState extends State<EntryEditor> {
     draft = e != null ? EntryDraft.editing(e) : EntryDraft(spaceId: widget.draftSpaceId, kind: widget.kind, date: widget.defaultDate);
     amount.text = draft.amountText;
     note.text = draft.note;
+    shop.text = draft.store;
     _syncLineFields();
     if (isNew) WidgetsBinding.instance.addPostFrameCallback((_) => amountFocus.requestFocus());
   }
@@ -51,6 +54,7 @@ class _EntryEditorState extends State<EntryEditor> {
   void dispose() {
     amount.dispose();
     note.dispose();
+    shop.dispose();
     amountFocus.dispose();
     scroll.dispose();
     for (final (a, b) in lineFields) {
@@ -111,6 +115,7 @@ class _EntryEditorState extends State<EntryEditor> {
       _readLines();
       final n = draft.applyReceiptText(text);
       amount.text = draft.amountText;
+      shop.text = draft.store;
       _syncLineFields();
       if (draft.categoryId == null) {
         final g = categories().where((c) => c.name == 'Groceries').firstOrNull;
@@ -132,6 +137,7 @@ class _EntryEditorState extends State<EntryEditor> {
   void _readLines() {
     draft.amountText = amount.text;
     draft.note = note.text;
+    draft.store = shop.text;
     for (var i = 0; i < lineFields.length && i < draft.lines.length; i++) {
       draft.lines[i]
         ..name = lineFields[i].$1.text
@@ -347,6 +353,7 @@ class _EntryEditorState extends State<EntryEditor> {
                 padding: const EdgeInsets.only(top: 8),
                 child: Muted(readNote!, key: const Key('readNote')),
               ),
+            if (lineFields.isNotEmpty || draft.receiptId != null || shop.text.isNotEmpty) _shopField(context, store),
             for (var i = 0; i < lineFields.length; i++) _lineRow(context, i, store, pal),
             if (lineFields.isNotEmpty || draft.receiptId != null)
               Wrap(
@@ -395,6 +402,41 @@ class _EntryEditorState extends State<EntryEditor> {
     );
   }
 
+  /// The shop: read from the receipt, or typed / picked. Prices are compared at the same shop.
+  Widget _shopField(BuildContext context, BudgetStore store) {
+    final known = <String>{'Mercator', 'Spar', 'Lidl', 'Hofer', 'Tuš', 'Eurospin', 'Jager'};
+    for (final t in store.data.transactions) {
+      if (t.store.isNotEmpty && !known.any((k) => PriceHistory.sameStore(k, t.store))) known.add(t.store);
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: TextField(
+        key: const Key('shopField'),
+        controller: shop,
+        maxLength: Limits.store,
+        textCapitalization: TextCapitalization.words,
+        decoration: InputDecoration(
+          labelText: 'Shop',
+          hintText: 'Read from the receipt, or type it',
+          counterText: '',
+          isDense: true,
+          border: const OutlineInputBorder(),
+          suffixIcon: PopupMenuButton<String>(
+            key: const Key('shopPick'),
+            tooltip: 'Pick a shop',
+            icon: const Icon(Icons.storefront_outlined),
+            onSelected: (v) => setState(() {
+              shop.text = v;
+              _readLines();
+            }),
+            itemBuilder: (_) => [for (final k in known) PopupMenuItem(value: k, child: Text(k))],
+          ),
+        ),
+        onChanged: (_) => setState(_readLines),
+      ),
+    );
+  }
+
   Widget _lineRow(BuildContext context, int i, dynamic store, Palette pal) {
     final (nameField, priceField) = lineFields[i];
     final line = DraftLine(name: nameField.text, priceText: priceField.text, read: i < draft.lines.length ? draft.lines[i].read : null);
@@ -407,6 +449,8 @@ class _EntryEditorState extends State<EntryEditor> {
     final amount = it == null || q == null ? '' : (it.unit == 'kg' ? '${q.toString().replaceAll('.', ',')} kg ×' : '${q.round()} ×');
     final perKg = it?.unit == 'kg' ? '/kg' : '';
     final qtyText = it == null || q == null || it.perUnit == null ? '' : '$amount ${money0(it.perUnit!)}$perKg · ';
+    // The last price is from another shop when it was never bought at this one.
+    final at = cmp == null || cmp.elsewhere.isEmpty ? '' : ' at ${cmp.elsewhere}';
     final (String text0, Color color) = switch (cmp?.kind) {
       null => ('', pal.muted),
       // Quantity × price of one is not the line total: something is misread; say so it can be fixed.
@@ -415,9 +459,9 @@ class _EntryEditorState extends State<EntryEditor> {
         pal.over,
       ),
       'new' => ('First time', pal.muted),
-      'same' => ('Same as ${shortDay(cmp!.date)} (${money(cmp.before)})', pal.muted),
-      'up' => ('▲ +${pct(cmp!.percent)}% since ${shortDay(cmp.date)} (was ${money(cmp.before)})', pal.over),
-      _ => ('▼ ${pct(cmp!.percent)}% since ${shortDay(cmp.date)} (was ${money(cmp.before)})', pal.income),
+      'same' => ('Same as ${shortDay(cmp!.date)}$at (${money(cmp.before)})', pal.muted),
+      'up' => ('▲ +${pct(cmp!.percent)}% since ${shortDay(cmp.date)}$at (was ${money(cmp.before)})', pal.over),
+      _ => ('▼ ${pct(cmp!.percent)}% since ${shortDay(cmp.date)}$at (was ${money(cmp.before)})', pal.income),
     };
     final text = text0.isEmpty ? '' : '$qtyText$text0';
     return Padding(

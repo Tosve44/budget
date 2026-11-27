@@ -57,7 +57,7 @@ function line() {
 const receipts = [];
 for (let i = 0; i < 4000; i++) {
   const text = Array.from({ length: int(1, 18) }, line).join(rnd() < 0.2 ? '\r\n' : '\n');
-  receipts.push({ text, items: receipt.parseReceipt(text), total: receipt.findTotal(text) });
+  receipts.push({ text, items: receipt.parseReceipt(text), total: receipt.findTotal(text), store: receipt.findStore(text) });
 }
 // Receipts with quantities and weights (on the line below, above, or with the total), and
 // litres misread as "1": made with their own random numbers so the cases above stay the same.
@@ -83,7 +83,7 @@ for (let i = 0; i < 1500; i++) {
     if (rnd() < 0.15) ls.push(line());
   }
   const text = ls.join('\n');
-  receipts.push({ text, items: receipt.parseReceipt(text), total: receipt.findTotal(text) });
+  receipts.push({ text, items: receipt.parseReceipt(text), total: receipt.findTotal(text), store: receipt.findStore(text) });
 }
 seed = keep;
 writeFileSync(`${out}/receipts.json`, JSON.stringify(receipts));
@@ -174,5 +174,41 @@ writeFileSync(`${out}/quantities.json`, JSON.stringify({
   data: q.data,
   history: [...q.itemHistory().values()].map((g) => ({ key: g.key, prices: g.entries.map((e) => e.price), units: g.entries.map((e) => e.unit ?? null) })),
   previous: qprev,
+}));
+// Shops: which shop a receipt is from, and prices compared at the same shop.
+seed = 20261129;
+const heads = ['MERCATOR d.d.', 'Mercator Center Šiška', 'MERCAT0R', 'INTERSPAR Vič', 'SPAR Slovenija d.o.o.', 'Lidl Slovenija d.o.o. k.d.',
+  'LIDL', 'L1DL', 'HOFER trgovina d.o.o.', 'H0FER', 'ENGROTUŠ d.o.o.', 'Supermarket Tuš Bežigrad', 'TUŠ', 'tuševa ulica 3', 'Eurospin',
+  'dm-drogerie markt', 'MÜLLER', 'Mueller', 'Kaufland', 'KONZUM plus', 'Maxi', 'Bingo d.o.o.', 'ALDI', 'Billa', 'PETROL d.d.', 'OMV Slovenija',
+  'Trgovina Kos', 'Sparkling 0,99', 'Spargelj 1,99', 'E.Leclerc', 'Jager', 'Merkur', ''];
+const storeTexts = [];
+for (let i = 0; i < 800; i++) {
+  const lines = Array.from({ length: int(0, 9) }, () => (rnd() < 0.5 ? pick(names) + ' ' + price() : pick(skipLines)));
+  const at = rnd() < 0.7 ? int(0, Math.min(lines.length, 7)) : lines.length;
+  lines.splice(at, 0, pick(heads));
+  if (rnd() < 0.2) lines.splice(int(0, lines.length), 0, pick(heads));
+  const text = lines.join(pick(['\n', '\r\n'])) + (rnd() < 0.2 ? '\n\n  ' : '');
+  storeTexts.push({ text, store: receipt.findStore(text) });
+}
+const w = new store.Store(new Mem());
+const wcat = w.data.categories.find((c) => c.spaceId === 'sp_personal_tosve' && c.name === 'Groceries').id;
+const shops = ['Mercator', 'MERCATOR', 'Spar', 'SPAR ', 'Lidl', 'Tuš', 'Hofer', '', ''];
+for (let i = 0; i < 300; i++) {
+  const its = Array.from({ length: int(1, 4) }, () => ({ name: pick(qnames), price: int(10, 2000) }));
+  w.addTransaction({ spaceId: 'sp_personal_tosve', categoryId: wcat, kind: 'expense', amount: int(1, 9000), date: `${pick(months)}-${String(int(1, 28)).padStart(2, '0')}`, items: its, store: pick(shops) });
+}
+const trendOf = (t) => ({ store: t.store, prices: t.entries.map((e) => e.price), change: t.change });
+const wprev = [];
+for (let i = 0; i < 300; i++) {
+  const nm = pick(qnames), d = `${pick(months)}-${String(int(1, 28)).padStart(2, '0')}`, sh = pick([...shops, 'Eurospin', undefined]);
+  wprev.push({ name: nm, before: d, store: sh ?? null, result: w.previousPrice(nm, d, undefined, sh) });
+}
+writeFileSync(`${out}/stores.json`, JSON.stringify({
+  texts: storeTexts,
+  data: w.data,
+  history: [...w.itemHistory().values()].map((g) => ({
+    key: g.key, stores: g.entries.map((e) => e.store), trend: trendOf(store.storeTrend(g.entries)), spar: trendOf(store.storeTrend(g.entries, 'spar')),
+  })),
+  previous: wprev,
 }));
 console.log(`Wrote golden files to ${out}: ${receipts.length} receipts, ${money.length} money inputs, ${normalized.length} names, ${s.data.transactions.length} entries.`);

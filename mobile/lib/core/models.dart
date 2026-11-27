@@ -258,6 +258,9 @@ class Transaction {
   /// Receipt lines.
   List<ReceiptItem>? items;
 
+  /// The shop ("Mercator"), read from the receipt or typed; '' when not known.
+  String store;
+
   Transaction({
     required this.id,
     required this.spaceId,
@@ -271,6 +274,7 @@ class Transaction {
     required this.updatedAt,
     this.receiptId,
     this.items,
+    this.store = '',
   });
 
   factory Transaction.fromJson(Map<String, dynamic> j) {
@@ -288,6 +292,7 @@ class Transaction {
       updatedAt: (j['updatedAt'] as String?) ?? created,
       receiptId: j['receiptId'] as String?,
       items: (j['items'] as List?)?.map((e) => ReceiptItem.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      store: j['store'] is String ? j['store'] as String : '',
     );
   }
 
@@ -304,6 +309,7 @@ class Transaction {
     'updatedAt': updatedAt,
     if (receiptId != null) 'receiptId': receiptId,
     if (items != null) 'items': items!.map((e) => e.toJson()).toList(),
+    if (store.isNotEmpty) 'store': store,
   };
 
   Transaction copy() => Transaction.fromJson(toJson());
@@ -454,6 +460,7 @@ class Limits {
   static const items = 300;
   static const itemName = 120;
   static const personName = 40;
+  static const store = 60;
 
   /// Characters as the database counts them (Unicode code points).
   static int length(String s) => s.runes.length;

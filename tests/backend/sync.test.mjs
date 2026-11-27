@@ -303,6 +303,43 @@ test('a category icon chosen on one phone shows on the other', async () => {
   assert.equal(T.store.category(c.id).icon, '', 'going back to the automatic icon syncs too');
 });
 
+test('the shop on a receipt and its quantities sync to the other phone', async () => {
+  const s = T.store;
+  const P = s.houseSpace().id;
+  const G = s.categories(P).find((c) => c.name === 'Groceries').id;
+  const t = s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: 150, date: '2026-11-21', store: 'Lidl',
+    items: [{ name: 'Banane', price: 150, qty: 1.02, unit: 'kg', unitPrice: 147 }] });
+  await T.sync.syncNow(); await M.sync.syncNow();
+  const m = M.store.data.transactions.find((x) => x.id === t.id);
+  assert.equal(m?.store, 'Lidl');
+  assert.deepEqual(m.items, [{ name: 'Banane', price: 150, qty: 1.02, unit: 'kg', unitPrice: 147 }]);
+  M.store.updateTransaction(t.id, { store: 'Mercator' });
+  await M.sync.syncNow(); await T.sync.syncNow();
+  assert.equal(T.store.data.transactions.find((x) => x.id === t.id).store, 'Mercator', 'a corrected shop syncs back');
+});
+
+test('before the store column exists in the cloud, entries still sync (without the shop)', { skip: !FAKE && 'needs the local test database' }, async () => {
+  const { Client } = require('pg');
+  const db = new Client({ connectionString: process.env.PGURL || 'postgres://postgres@/budget_test?host=/tmp&port=54329' });
+  await db.connect();
+  await db.query('alter table public.transactions drop column store');
+  try {
+    const s = T.store;
+    const P = s.houseSpace().id;
+    const G = s.categories(P).find((c) => c.name === 'Groceries').id;
+    const t = s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: 99, date: '2026-11-20', store: 'Hofer', items: [{ name: 'Mleko', price: 99 }] });
+    await T.sync.syncNow();
+    assert.equal(T.sync.pendingCount(), 0, 'uploaded');
+    await M.sync.syncNow();
+    assert.ok(M.store.data.transactions.find((x) => x.id === t.id), 'arrived on the other phone');
+    await T.sync.syncNow();
+    assert.equal(T.store.data.transactions.find((x) => x.id === t.id).store, 'Hofer', 'shop kept on the phone that read it');
+  } finally {
+    await db.query("alter table public.transactions add column if not exists store text not null default '' check (char_length(store) <= 60)");
+    await db.end();
+  }
+});
+
 test('before the icon column exists in the cloud, categories still sync (without the icon)', { skip: !FAKE && 'needs the local test database' }, async () => {
   const { Client } = require('pg');
   const db = new Client({ connectionString: process.env.PGURL || 'postgres://postgres@/budget_test?host=/tmp&port=54329' });

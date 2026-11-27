@@ -34,6 +34,7 @@ function check(name, ok, detail = '') { ok ? pass++ : fail++; out.push(`${ok ? '
     const status = await p.textContent('#ocrStatus');
     const items = await p.$$eval('.item-row', (rs) => rs.map((x) => ({ name: x.querySelector('.item-name').value, price: x.querySelector('.item-price').value })));
     const amount = await p.inputValue('#amount');
+    const shop = await p.inputValue('#shop');
     if (SHOTS && r.week === 25) await p.screenshot({ path: `${SHOTS}/web-receipt-week25.png`, fullPage: true });
     const got = items.map((i) => ({ name: i.name, price: cents(i.price) }));
     const fixes = await correctLikeAPerson(r, got);
@@ -41,10 +42,12 @@ function check(name, ok, detail = '') { ok ? pass++ : fail++; out.push(`${ok ? '
       await p.locator('#ocrStatus').scrollIntoViewIfNeeded();
       await p.screenshot({ path: `${SHOTS}/web-receipt-warning.png` });
     }
+    const realShop = r.store === 'Tus' ? 'Tuš' : r.store;
+    if (shop !== realShop) await p.fill('#shop', realShop); // a person would fix a wrong shop too
     if (cents(amount) !== r.total) await p.fill('#amount', String(r.total / 100).replace('.', ','));
     await p.click('#saveTx2');
     await p.waitForFunction(() => !document.querySelector('#sheet').open);
-    read.push({ r, status, amount: cents(amount), items: got, fixes });
+    read.push({ r, status, shop, amount: cents(amount), items: got, fixes });
     process.stdout.write(`${r.file} ${r.store}: ${items.length}/${r.items.length} items, total ${amount}${fixes.length ? `, fixed by hand: ${fixes.join('; ')}` : ''}\n`);
   }
 
@@ -60,10 +63,19 @@ function check(name, ok, detail = '') { ok ? pass++ : fail++; out.push(`${ok ? '
     }
     const fill = async (i, f, v) => p.fill(`input[data-i="${i}"][data-f=${f}]`, v);
     const later = [];
+    // A person first finds the line by its name, then by its price, and only then takes a
+    // line that is left over.
+    const pick = new Map();
+    for (const test of [(y, e) => norm(y.name) === norm(e.name), (y, e) => y.price === e.price, () => true]) {
+      for (const e of todo) {
+        if (pick.has(e)) continue;
+        const x = rows.find((y) => !y.done && test(y, e));
+        if (x) { x.done = true; pick.set(e, x); }
+      }
+    }
     for (const e of todo) {
-      const x = rows.find((y) => !y.done && norm(y.name) === norm(e.name)) || rows.find((y) => !y.done && y.price === e.price) || rows.find((y) => !y.done);
+      const x = pick.get(e);
       if (!x) { later.push(e); continue; }
-      x.done = true;
       if (norm(x.name) !== norm(e.name)) await fill(x.i, 'name', e.name);
       if (x.price !== e.price) await fill(x.i, 'price', String(e.price / 100).replace('.', ','));
       fixes.push(`"${x.name}" ${x.price / 100} → "${e.name}" ${e.price / 100}`);
@@ -103,39 +115,74 @@ function check(name, ok, detail = '') { ok ? pass++ : fail++; out.push(`${ok ? '
   out.push(`    ${misread.length} receipts had a misread price; the "doesn't add up" warning showed on ${warned.length}`);
   check('no warning on receipts that were read right', read.filter((x) => !x.fixes.length && /add up/.test(x.status) && !x.r.discount).length === 0);
 
-  // 2. Prices screen: one row per item name, newest price and change since the first purchase.
-  await p.click('[data-tab=prices]');
-  await p.waitForFunction(() => !document.querySelector('.toast.show, #toast:not([hidden])'), null, { timeout: 5000 }).catch(() => {});
-  await p.waitForTimeout(2500); // let the "Added" message fade before screenshots
-  const rows = await p.$$eval('.price-row', (rs) => rs.map((x) => ({
-    name: x.querySelector('.tx-cat').textContent, price: x.querySelector('.tx-amt').textContent,
-    badge: x.querySelector('.badge')?.textContent || '', meta: x.querySelector('.tx-meta').textContent })));
-  fs.writeFileSync(path.join(SHOTS || '/tmp', 'web-prices.json'), JSON.stringify(rows, null, 1));
-  const byName = new Map();
+  const shopName = (st) => (st === 'Tus' ? 'Tuš' : st);
+  const shopsRight = read.filter((x) => x.shop === shopName(x.r.store)).length;
+  check(`shop read from the receipt: ${shopsRight}/${read.length}`, shopsRight === read.length,
+    read.filter((x) => x.shop !== shopName(x.r.store)).map((x) => `${x.r.file}: "${x.shop}" not ${shopName(x.r.store)}`).join('; '));
+
+  // 2. Every price in the history must be the real price of one piece / one kilo that day, at
+  // that shop. A line whose quantity doesn't add up is left out (counted) rather than shown wrong.
+  const truth = new Map(); // item -> date -> line
   for (const r of expected.receipts) for (const it of r.items) {
     const k = norm(it.name);
-    if (!byName.has(k)) byName.set(k, { key: it.key, list: [] });
-    byName.get(k).list.push({ date: r.date, ...it });
+    if (!truth.has(k)) truth.set(k, { key: it.key, byDate: new Map() });
+    truth.get(k).byDate.set(r.date, { ...it, date: r.date, store: shopName(r.store) });
   }
-  check(`Prices shows ${byName.size} items`, rows.length === byName.size, `shows ${rows.length}`);
+  const history = await p.evaluate(async () => {
+    const m = await import('./store.js');
+    const s = new m.Store(localStorage);
+    return [...s.itemHistory().values()].map((g) => ({ key: g.key, name: g.name, entries: g.entries.map(({ date, price, unit, store }) => ({ date, price, unit, store })), trend: m.storeTrend(g.entries) }));
+  });
+  check(`history has ${truth.size} items`, history.length === truth.size, `has ${history.length}`);
+  let wrong = 0, skipped = 0;
+  const want = (e) => (e.fixedByHand === 'added' ? e.price : e.unitPrice);
+  for (const [k, { byDate }] of truth) {
+    const g = history.find((h) => h.key === k);
+    if (!g) { check(`${k} in the history`, false); continue; }
+    for (const e of g.entries) {
+      const t = byDate.get(e.date);
+      const tol = t?.fixedByHand ? 1 : 0;
+      if (!t || Math.abs(e.price - want(t)) > tol || e.store !== t.store || (e.unit === 'kg') !== (t.unit === 'kg' && t.fixedByHand !== 'added')) {
+        wrong++; out.push(`    WRONG ${k} ${e.date}: ${e.price} ${e.unit || ''} at ${e.store}, real ${t ? `${t.unitPrice} at ${t.store}` : 'not bought'}`);
+      }
+    }
+    skipped += byDate.size - g.entries.length;
+  }
+  check('every price in the history is the real one for that day and shop', wrong === 0, `${wrong} wrong`);
+  out.push(`    ${skipped} purchases left out because their quantity line did not add up`);
+
+  // 3. Prices screen: newest price, and the change since the first purchase at the same shop.
+  await p.click('[data-tab=prices]');
+  await p.waitForTimeout(2500); // let the "Added" message fade before screenshots
+  const rowsOf = () => p.$$eval('.price-row', (rs) => rs.map((x) => ({
+    name: x.querySelector('.tx-cat').textContent, price: x.querySelector('.tx-amt').textContent,
+    badge: x.querySelector('.badge')?.textContent || '', meta: x.querySelector('.tx-meta').textContent })));
+  const rows = await rowsOf();
+  fs.writeFileSync(path.join(SHOTS || '/tmp', 'web-prices.json'), JSON.stringify(rows, null, 1));
+  check(`Prices shows ${truth.size} items`, rows.length === truth.size, `shows ${rows.length}`);
+  const badgeOf = (c) => (c === null ? 'new' : c === 0 ? 'same' : `${c > 0 ? '▲ +' : '▼ '}${c}%`);
   const report = [];
-  for (const [k, { key, list }] of byName) {
+  for (const [k, { key, byDate }] of truth) {
     const row = rows.find((x) => norm(x.name) === k);
-    if (!row) { check(`${k} on Prices`, false, 'missing'); continue; }
-    const first = list[0], last = list.at(-1);
-    const wantUnitPct = list.length > 1 ? Math.round(((last.unitPrice - first.unitPrice) / first.unitPrice) * 1000) / 10 : null;
-    const shownPct = /new/.test(row.badge) ? null : /same/.test(row.badge) ? 0 : Number(row.badge.replace(/[^\d.-]/g, '')) * (/▼/.test(row.badge) ? 1 : 1);
-    report.push({ item: row.name, trend: expected.trends[key], times: list.length, first: first.unitPrice / 100, last: last.unitPrice / 100, wantUnitPct, shown: row.badge, shownPrice: row.price });
-    // A line added by hand has no quantity, so by-weight items typed in by hand count as the line
-    // total; a corrected price is divided by the quantity (can be a cent off the printed price).
-    const want = (e) => (e.fixedByHand === 'added' ? e.price : e.unitPrice);
-    const near = (a, b, tol) => a === b || (a !== null && b !== null && Math.abs(a - b) <= tol);
-    const fuzzy = first.fixedByHand || last.fixedByHand;
-    const wp = list.length > 1 ? Math.round(((want(last) - want(first)) / want(first)) * 1000) / 10 : null;
-    check(`${row.name}: latest ${row.price}, ${row.badge || '(bought once)'}`, near(cents(row.price), want(last), fuzzy ? 1 : 0) && near(shownPct, wp, fuzzy ? 0.3 : 0) && (last.unit === 'kg') === row.price.includes('/kg'),
-      `want ${want(last) / 100}${last.unit === 'kg' ? '/kg' : ''} ${wp}% (per ${last.unit === 'kg' ? 'kg' : 'piece'} ${first.unitPrice / 100} → ${last.unitPrice / 100})`);
+    const g = history.find((h) => h.key === k);
+    if (!row || !g) continue;
+    // The same change worked out from the real prices at the shop of the newest purchase.
+    const real = [...byDate.values()].filter((e) => e.store === g.trend.store && g.entries.some((x) => x.date === e.date));
+    const rc = real.length > 1 ? Math.round(((want(real.at(-1)) - want(real[0])) / want(real[0])) * 1000) / 10 : null;
+    const fuzzy = real.some((e) => e.fixedByHand);
+    const shown = g.entries.length > 1 ? row.badge : '';
+    report.push({ item: row.name, trend: expected.trends[key], shop: g.trend.store, times: real.length, shown: row.badge, real: badgeOf(rc), price: row.price });
+    const ok = g.entries.length === 1 ? shown === '' : (fuzzy && rc !== null && g.trend.change !== null ? Math.abs(g.trend.change - rc) <= 0.3 && shown === badgeOf(g.trend.change) : shown === badgeOf(rc));
+    check(`${row.name} at ${g.trend.store}: ${row.price}, ${row.badge || '(bought once)'}`, ok && row.meta.startsWith(`${g.trend.store} · `), `real change ${badgeOf(rc)}, meta "${row.meta}"`);
   }
   console.table(report);
+  // Picking a shop shows only what was bought there.
+  await p.click('[data-shop="Lidl"]');
+  const lidl = await rowsOf();
+  const lidlItems = [...truth.entries()].filter(([, v]) => [...v.byDate.values()].some((e) => e.store === 'Lidl')).length;
+  check(`Lidl chip: ${lidl.length} items bought at Lidl`, lidl.length === lidlItems && lidl.every((r) => r.meta.startsWith('Lidl · ')), `${lidl.length} rows, want ${lidlItems}`);
+  if (SHOTS) await p.screenshot({ path: `${SHOTS}/web-prices-lidl.png`, fullPage: true });
+  await p.click('[data-shop=""]');
   if (SHOTS) {
     await p.screenshot({ path: `${SHOTS}/web-prices.png`, fullPage: true });
     for (const q of ['kava', 'banane', 'jogurt', 'maslo']) {

@@ -235,6 +235,29 @@ function readQuantity(text) {
   return { qty: Math.round(qty * 1000) / 1000, unit: byWeight ? 'kg' : undefined, unitPrice: Number.isFinite(each) && each > 0 ? each : undefined };
 }
 
+// Which shop a receipt is from, from the name printed on it (usually in the first lines).
+// Covers the big chains in Slovenia and around; null if none is found.
+// Each name stands alone: not part of a longer word ("tuševa" is not Tuš), and letters like Š
+// count as letters (a plain \b would not see the end of "TUŠ").
+const STORES = [
+  ['Mercator', 'merc[a@]t[o0]r'], ['Spar', '(inter)?spar'], ['Lidl', 'lid[l1i]'],
+  ['Hofer', 'h[o0]fer'], ['Tuš', '(engro)?tu[sš]'], ['Eurospin', 'eurospin'], ['Jager', 'jager'],
+  ['E.Leclerc', 'leclerc'], ['dm', 'dm[\\s-]*drogerie'], ['Müller', 'm(ü|ue|u)ller'], ['Kaufland', 'kaufland'],
+  ['Konzum', 'konzum'], ['Maxi', 'maxi'], ['Bingo', 'bingo'], ['Aldi', 'aldi'], ['Billa', 'billa'],
+  ['Petrol', 'petrol'], ['OMV', 'omv'],
+].map(([name, re]) => [name, new RegExp(`(?<![\\p{L}\\p{N}])(?:${re})(?![\\p{L}\\p{N}])`, 'iu')]);
+export function findStore(text) {
+  const lines = String(text).split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  // The shop's name is at the top; look there first, so a product name lower down (e.g. a
+  // "Spar" own brand bought elsewhere) doesn't win.
+  for (const part of [lines.slice(0, 6), lines]) {
+    for (const line of part) {
+      for (const [name, re] of STORES) if (re.test(line)) return name;
+    }
+  }
+  return null;
+}
+
 // The receipt's grand total ("SKUPAJ", "ZA PLAČILO", "TOTAL"...), which already includes discounts.
 const TOTAL_WORDS = /\b(skupaj|za pla[čc]ilo|total|ukupno|za uplatu|summe)\b/i;
 export function findTotal(text) {

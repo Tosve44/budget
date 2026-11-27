@@ -81,6 +81,46 @@ class ReceiptParser {
   static ReceiptItem _withQuantity(ReceiptItem it, ({double qty, String? unit, int? unitPrice}) a) =>
       ReceiptItem(name: it.name, price: it.price, qty: a.qty, unit: a.unit, unitPrice: a.unitPrice);
 
+  // Each name stands alone: not part of a longer word ("tuševa" is not Tuš), and letters like Š
+  // count as letters.
+  static final _stores = [
+    ('Mercator', 'merc[a@]t[o0]r'),
+    ('Spar', '(inter)?spar'),
+    ('Lidl', 'lid[l1i]'),
+    ('Hofer', 'h[o0]fer'),
+    ('Tuš', '(engro)?tu[sš]'),
+    ('Eurospin', 'eurospin'),
+    ('Jager', 'jager'),
+    ('E.Leclerc', 'leclerc'),
+    ('dm', r'dm[\s-]*drogerie'),
+    ('Müller', 'm(ü|ue|u)ller'),
+    ('Kaufland', 'kaufland'),
+    ('Konzum', 'konzum'),
+    ('Maxi', 'maxi'),
+    ('Bingo', 'bingo'),
+    ('Aldi', 'aldi'),
+    ('Billa', 'billa'),
+    ('Petrol', 'petrol'),
+    ('OMV', 'omv'),
+  ].map((s) => (s.$1, RegExp('(?<![\\p{L}\\p{N}])(?:${s.$2})(?![\\p{L}\\p{N}])', caseSensitive: false, unicode: true))).toList();
+
+  /// Which shop a receipt is from, from the name printed on it (usually in the first lines).
+  /// Covers the big chains in Slovenia and around; null if none is found. Same as findStore in
+  /// the web app's receipt.js.
+  static String? findStore(String text) {
+    final lines = text.split(_lineBreak).map(jsTrim).where((l) => l.isNotEmpty).toList();
+    // The shop's name is at the top; look there first, so a product name lower down (e.g. a
+    // "Spar" own brand bought elsewhere) doesn't win.
+    for (final part in [lines.take(6), lines]) {
+      for (final line in part) {
+        for (final (name, re) in _stores) {
+          if (re.hasMatch(line)) return name;
+        }
+      }
+    }
+    return null;
+  }
+
   /// The receipt's grand total ("SKUPAJ", "ZA PLAČILO", "TOTAL"...), which already includes
   /// discounts. When several lines qualify, the largest amount wins. null if none is printed.
   static int? findTotal(String text) {

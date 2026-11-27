@@ -14,10 +14,25 @@ class PricesScreen extends StatefulWidget {
 class _PricesScreenState extends State<PricesScreen> {
   String search = '';
 
+  /// The shop picked with the chips (null = all shops).
+  String? shop;
+
   @override
   Widget build(BuildContext context) {
     final model = ModelScope.of(context);
-    final groups = PriceHistory.list(model.store.data.transactions, search: search);
+    final all = PriceHistory.list(model.store.data.transactions, search: search);
+    // Shops seen on receipts. Prices differ from shop to shop, so each % is worked out between
+    // purchases at the same shop; a chip shows one shop only.
+    final shops = PriceHistory.stores(PriceHistory.groups(model.store.data.transactions).values);
+    if (shop != null && !shops.any((s) => PriceHistory.sameStore(s, shop))) shop = null;
+    final pick = shop;
+    final groups = pick == null
+        ? all
+        : ([
+            for (final g in all)
+              if (g.entries.any((e) => PriceHistory.sameStore(e.store, pick)))
+                PriceGroup(g.key, g.name, g.entries.where((e) => PriceHistory.sameStore(e.store, pick)).toList()),
+          ]..sort((a, b) => a.latest.date != b.latest.date ? b.latest.date.compareTo(a.latest.date) : a.key.compareTo(b.key)));
     return Scaffold(
       appBar: AppBar(
         title: const Text('Prices', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -39,6 +54,25 @@ class _PricesScreenState extends State<PricesScreen> {
               onChanged: (v) => setState(() => search = v),
             ),
           ),
+          if (shops.isNotEmpty)
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+              child: Row(
+                children: [
+                  for (final s in [null, ...shops])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ChoiceChip(
+                        key: Key('shop.${s ?? ''}'),
+                        label: Text(s ?? 'All shops'),
+                        selected: s == null ? pick == null : (pick != null && PriceHistory.sameStore(s, pick)),
+                        onSelected: (_) => setState(() => shop = s),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           if (groups.isEmpty)
             Padding(
               padding: const EdgeInsets.all(24),
@@ -53,7 +87,7 @@ class _PricesScreenState extends State<PricesScreen> {
             SectionCard(
               title: 'Grocery prices over time',
               children: [
-                const Muted('Newest first. The % is the change since the first time you bought it, per piece or per kg.'),
+                const Muted('Newest first. The % is the change since the first time you bought it at the same shop, per piece or per kg.'),
                 const SizedBox(height: 6),
                 for (final g in groups) _row(context, g),
               ],
@@ -65,7 +99,9 @@ class _PricesScreenState extends State<PricesScreen> {
 
   Widget _row(BuildContext context, PriceGroup g) {
     final model = ModelScope.of(context);
-    final prev = g.previous;
+    final tr = g.trend(); // at the shop of the newest purchase
+    final last = tr.last!;
+    final prev = tr.entries.length > 1 ? tr.entries[tr.entries.length - 2] : null;
     return KeyedSubtree(
       key: ValueKey(g.key),
       child: InkWell(
@@ -81,25 +117,27 @@ class _PricesScreenState extends State<PricesScreen> {
                   children: [
                     Text(g.name, overflow: TextOverflow.ellipsis),
                     Muted(
-                      '${g.entries.length}× · last ${shortDay(g.latest.date)}${prev != null ? ' · before ${model.money(prev.price)}${prev.unit == 'kg' ? '/kg' : ''}' : ''}',
+                      '${tr.store.isNotEmpty ? '${tr.store} · ' : ''}${tr.entries.length}× · last ${shortDay(last.date)}'
+                      '${prev != null ? ' · before ${model.money(prev.price)}${prev.unit == 'kg' ? '/kg' : ''}' : ''}',
+                      key: const Key('priceMeta'),
                     ),
                   ],
                 ),
               ),
-              if (g.entries.length > 1)
+              if (tr.entries.length > 1)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Sparkline(values: g.entries.map((e) => e.price).toList()),
+                  child: Sparkline(values: tr.entries.map((e) => e.price).toList()),
                 ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '${model.money(g.latest.price)}${g.latest.unit == 'kg' ? '/kg' : ''}',
+                    '${model.money(last.price)}${last.unit == 'kg' ? '/kg' : ''}',
                     key: const Key('priceLatest'),
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  ChangeBadge(percent: g.changeSinceFirst, single: g.entries.length == 1),
+                  ChangeBadge(percent: tr.change, single: g.entries.length == 1),
                 ],
               ),
             ],
@@ -138,21 +176,23 @@ class PriceDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final model = ModelScope.of(context);
-    final change = group.changeSinceFirst;
+    final tr = group.trend();
+    final change = tr.change;
     return Scaffold(
       appBar: AppBar(title: Text(group.name, overflow: TextOverflow.ellipsis)),
       body: ListView(
         children: [
-          if (group.entries.length > 1)
+          if (tr.entries.length > 1)
             SectionCard(
+              title: tr.store.isNotEmpty ? 'At ${tr.store}' : null,
               children: [
                 LayoutBuilder(
                   builder: (context, c) =>
-                      Sparkline(values: group.entries.map((e) => e.price).toList(), width: c.maxWidth, height: 160, dots: true),
+                      Sparkline(values: tr.entries.map((e) => e.price).toList(), width: c.maxWidth, height: 160, dots: true),
                 ),
                 if (change != null) ...[
                   const SizedBox(height: 8),
-                  Text('Since the first purchase: ${change > 0 ? '+' : ''}${pct(change)}%'),
+                  Text('Since the first purchase${tr.store.isNotEmpty ? ' at ${tr.store}' : ''}: ${change > 0 ? '+' : ''}${pct(change)}%'),
                 ],
               ],
             ),
@@ -164,7 +204,7 @@ class PriceDetail extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(
                     children: [
-                      Expanded(child: Text(dayLabel(e.date))),
+                      Expanded(child: Text('${dayLabel(e.date)}${e.store.isNotEmpty ? ' · ${e.store}' : ''}')),
                       Text('${model.money(e.price)}${e.unit == 'kg' ? '/kg' : ''}'),
                     ],
                   ),

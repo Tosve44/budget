@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Store, toCents, shiftMonth, normalizeItem, createInitialData, pricePerUnit, cleanItem } from '../store.js';
+import { Store, toCents, shiftMonth, normalizeItem, createInitialData, pricePerUnit, cleanItem, storeTrend } from '../store.js';
 import { rowToTx } from '../sync.js';
-import { parseReceipt } from '../receipt.js';
+import { parseReceipt, findStore } from '../receipt.js';
 
 class MemStorage { constructor() { this.m = {}; } getItem(k) { return this.m[k] ?? null; } setItem(k, v) { this.m[k] = String(v); } }
 
@@ -309,4 +309,54 @@ test('bad quantities are dropped instead of spoiling the price history', () => {
 test('quantities survive the trip through the cloud', () => {
   const t = rowToTx({ id: 't', space_id: 's', category_id: 'c', kind: 'expense', amount: 150, date: '2026-11-21', items: [{ name: 'BANANE', price: 150, qty: 1.02, unit: 'kg', unitPrice: 147 }, { name: 'MLEKO', price: 119 }], created_at: '2026-11-21T10:00:00Z', updated_at: '2026-11-21T10:00:00Z' });
   assert.deepEqual(t.items, [{ name: 'BANANE', price: 150, qty: 1.02, unit: 'kg', unitPrice: 147 }, { name: 'MLEKO', price: 119 }]);
+});
+
+// ---- shops ----
+test('the shop is read from the top of the receipt', () => {
+  assert.equal(findStore(MERCATOR), 'Mercator');
+  assert.equal(findStore(LIDL), 'Lidl');
+  assert.equal(findStore('ENGROTUS d.o.o.\nSupermarket Tus Bezigrad'), 'Tuš');
+  assert.equal(findStore('INTERSPAR Vič\nKRUH 1,49'), 'Spar');
+  assert.equal(findStore('HOFER trgovina d.o.o.'), 'Hofer');
+  assert.equal(findStore('MERCAT0R d.o.o.'), 'Mercator'); // 0 read for O
+  // The name at the top wins over a product lower down.
+  assert.equal(findStore('Eurospin Slovenija\nA\nB\nC\nD\nE\nSPAR jogurt  0,59'), 'Eurospin');
+  assert.equal(findStore('Trgovina Kos\nMLEKO 1,19'), null);
+  assert.equal(findStore('Sparkling water 0,99'), null);
+  // Š and other letters count as letters: "TUŠ" is found, "tuševa" (part of a word) is not.
+  assert.equal(findStore('TUŠ d.o.o.'), 'Tuš');
+  assert.equal(findStore('Engrotuš d.o.o., Celje'), 'Tuš');
+  assert.equal(findStore('MÜLLER Ljubljana'), 'Müller');
+  assert.equal(findStore('Trgovina tuševa 3'), null);
+});
+
+test('the shop is kept on an entry, and prices are compared at the same shop', () => {
+  const s = freshStore();
+  const P = 'sp_personal_tosve', G = catId(s, P, 'Groceries');
+  const add = (date, store, price) => s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: price, date, store, items: [{ name: 'MLEKO 1L', price }] });
+  add('2026-06-06', 'Mercator', 119);
+  add('2026-06-13', '  Lidl ', 99);
+  add('2026-11-14', 'Mercator', 129);
+  const t = add('2026-11-21', 'Lidl', 109);
+  assert.equal(s.data.transactions[1].store, 'Lidl', 'trimmed');
+  assert.equal(add('2026-11-22', '   ', 1).store, undefined, 'no empty shop saved');
+  s.deleteTransaction(s.data.transactions.at(-1).id);
+  // Per shop: Lidl 0,99 → 1,09 (+10.1%), not Mercator 1,19 → Lidl 1,09.
+  const g = s.itemHistory().get('mleko 1l');
+  assert.deepEqual(storeTrend(g.entries).store, 'Lidl');
+  assert.equal(storeTrend(g.entries).change, 10.1);
+  assert.equal(storeTrend(g.entries, 'Mercator').change, 8.4);
+  assert.equal(storeTrend(g.entries, 'mercator').entries.length, 2, 'shop names match like item names');
+  // "was ..." on the entry screen: the same shop first, any shop when never bought there.
+  assert.deepEqual(s.previousPrice('Mleko 1L', '2026-11-20', null, 'Mercator'), { date: '2026-11-14', price: 129, store: 'Mercator' });
+  assert.deepEqual(s.previousPrice('Mleko 1L', '2026-11-20', null, 'Lidl'), { date: '2026-06-13', price: 99, store: 'Lidl' });
+  assert.deepEqual(s.previousPrice('Mleko 1L', '2026-11-20', null, 'Spar'), { date: '2026-11-14', price: 129, store: 'Mercator' });
+  s.updateTransaction(t.id, { store: 'Hofer' });
+  assert.equal(s.data.transactions.find((x) => x.id === t.id).store, 'Hofer');
+  // A purchase without a shop (typed by hand, or from before shops were kept) counts for every
+  // shop, so old history still shows a change.
+  const old = [{ date: '2026-05-01', price: 100, store: '' }, { date: '2026-06-01', price: 110, store: 'Spar' }, { date: '2026-07-01', price: 90, store: 'Lidl' }];
+  assert.equal(storeTrend(old).change, -10);
+  assert.equal(storeTrend(old, 'Spar').change, 10);
+  assert.equal(storeTrend([{ price: 100, store: '' }, { price: 120, store: 'Spar' }, { price: 125, store: '' }]).change, 25, 'no shop: every purchase');
 });

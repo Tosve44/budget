@@ -11,7 +11,7 @@ import 'package:budget/app_model.dart';
 import 'package:budget/core/money.dart';
 import 'package:budget/core/prices.dart';
 import 'package:budget/platform/receipt_reader.dart';
-import 'package:budget/ui/widgets.dart' show pct;
+import 'package:budget/ui/widgets.dart' show Muted, pct;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -36,7 +36,7 @@ String _input(int cents) => Money.inputText(cents, emptyForZero: false);
 class PriceRun {
   final AppModel model;
   final List<String> log = [];
-  int lines = 0, readRight = 0, totalsRight = 0, misread = 0, warned = 0, skipped = 0;
+  int lines = 0, readRight = 0, totalsRight = 0, misread = 0, warned = 0, skipped = 0, shopsRight = 0;
   PriceRun(this.model);
 }
 
@@ -71,15 +71,28 @@ Future<PriceRun> scanSixMonths(WidgetTester tester, QueueReader reader, {Future<
       run.misread++;
       if (note.contains('add up')) run.warned++;
     }
+    // The shop, read from the receipt's header; a person picks the right one if it is wrong.
+    final shop = shopName(r['store'] as String);
+    await reveal(tester, find.byKey(const Key('shopField')));
+    final readShop = _field(tester, 'shopField');
+    if (readShop == shop) {
+      run.shopsRight++;
+    } else {
+      await typeInto(tester, 'shopField', shop);
+    }
     if (shot != null && r['week'] == 25) await shot('receipt-week25');
     run.log.add(
       '${r['file']} ${r['store']}: ${got.length}/${want.length} lines read, total ${amount == r['total'] ? 'ok' : 'read as $amount'}'
+      '${readShop == shop ? '' : ', shop read as "$readShop"'}'
       '${fixes.isEmpty ? '' : ', fixed by hand: ${fixes.join('; ')}'}',
     );
     await tapKey(tester, 'saveEntry');
   }
   return run;
 }
+
+/// The shop as the app names it (the receipts' file says "Tus").
+String shopName(String store) => store == 'Tus' ? 'Tuš' : store;
 
 String _field(WidgetTester tester, String key) => tester.widget<TextField>(find.byKey(Key(key))).controller!.text;
 
@@ -113,18 +126,31 @@ Future<List<String>> _correct(WidgetTester tester, List<Map<String, dynamic>> wa
       todo.add(e);
     }
   }
+  // A person first finds the line by its name, then by its price, and only then takes a line
+  // that is left over.
+  final pick = <Map<String, dynamic>, int>{};
+  final tests = <bool Function(int k, Map<String, dynamic> e)>[
+    (k, e) => _norm(got[k].$1) == _norm(e['name'] as String),
+    (k, e) => got[k].$2 == e['price'],
+    (k, e) => true,
+  ];
+  for (final test in tests) {
+    for (final e in todo) {
+      if (pick.containsKey(e)) continue;
+      final i = [for (var k = 0; k < got.length; k++) k].where((k) => !done[k] && test(k, e)).firstOrNull;
+      if (i != null) {
+        done[i] = true;
+        pick[e] = i;
+      }
+    }
+  }
   final later = <Map<String, dynamic>>[];
   for (final e in todo) {
-    final open = [for (var k = 0; k < got.length; k++) k].where((k) => !done[k]).toList();
-    final i =
-        open.where((k) => _norm(got[k].$1) == _norm(e['name'] as String)).firstOrNull ??
-        open.where((k) => got[k].$2 == e['price']).firstOrNull ??
-        open.firstOrNull;
+    final i = pick[e];
     if (i == null) {
       later.add(e);
       continue;
     }
-    done[i] = true;
     if (_norm(got[i].$1) != _norm(e['name'] as String)) await typeInto(tester, 'itemName.$i', e['name'] as String);
     if (got[i].$2 != e['price']) {
       await typeInto(tester, 'itemPrice.$i', _input(e['price'] as int));
@@ -163,7 +189,7 @@ List<String> checkTrends(PriceRun run) {
   final byName = <String, Map<String, Map<String, dynamic>>>{}; // item -> date -> line
   for (final r in priceReceipts) {
     for (final it in (r['items'] as List).cast<Map<String, dynamic>>()) {
-      byName.putIfAbsent(_norm(it['name'] as String), () => {})[r['date'] as String] = it;
+      byName.putIfAbsent(_norm(it['name'] as String), () => {})[r['date'] as String] = {...it, 'store': shopName(r['store'] as String)};
     }
   }
   if (groups.length != byName.length) problems.add('Prices shows ${groups.length} items, want ${byName.length}');
@@ -186,6 +212,7 @@ List<String> checkTrends(PriceRun run) {
       if ((p.price - want).abs() > tol) {
         problems.add('$k on ${p.date}: shows ${p.price}, real ${e['unitPrice']} (${e['fixedByHand'] ?? 'read right'})');
       }
+      if (p.store != e['store']) problems.add('$k on ${p.date}: at ${p.store}, want ${e['store']}');
       final kg = e['unit'] == 'kg' && e['fixedByHand'] != 'added';
       if ((p.unit == 'kg') != kg) problems.add('$k on ${p.date}: per kg ${p.unit == 'kg'}, want $kg');
     }
@@ -195,15 +222,17 @@ List<String> checkTrends(PriceRun run) {
 }
 
 /// The Prices screen shows each item's newest price (per kg where sold by weight) and the change
-/// since the first purchase, as worked out from the history checked above.
+/// since the first purchase at the same shop, as worked out from the history checked above. The
+/// Lidl chip shows only what was bought at Lidl.
 Future<void> checkPricesScreen(WidgetTester tester, AppModel model, {Future<void> Function(String name)? shot}) async {
   await tapKey(tester, 'tab.prices');
   if (shot != null) await shot('prices');
   final groups = PriceHistory.groups(model.store.data.transactions);
-  for (final key in ['banane', 'jogurt navadni 180g', 'kava barcaffe 400g', 'alpsko mleko 3 5% 1l']) {
+  for (final key in ['banane', 'jogurt navadni 180g', 'kava barcaffe 400g', 'alpsko mleko 3 5% 1l', 'paradiznik']) {
     final g = groups[key]!;
-    final price = '${Money.format(g.latest.price)}${g.latest.unit == 'kg' ? '/kg' : ''}';
-    final p = g.changeSinceFirst;
+    final tr = g.trend();
+    final price = '${Money.format(tr.last!.price)}${tr.last!.unit == 'kg' ? '/kg' : ''}';
+    final p = tr.change;
     final badge = p == null ? 'new' : (p == 0 ? 'same' : (p > 0 ? '▲ +${pct(p)}%' : '▼ ${pct(p)}%'));
     final row = find.ancestor(of: find.text(g.name), matching: find.byKey(const Key('priceRow')));
     await reveal(tester, row);
@@ -217,11 +246,36 @@ Future<void> checkPricesScreen(WidgetTester tester, AppModel model, {Future<void
       findsOneWidget,
       reason: '${g.name} change',
     );
+    final meta = tester.widget<Muted>(find.descendant(of: row, matching: find.byKey(const Key('priceMeta')))).text;
+    expect(meta, startsWith('${tr.store} · ${tr.entries.length}×'), reason: '${g.name} shop');
   }
+  // Only Lidl.
+  await reveal(tester, find.byKey(const Key('shop.Lidl')));
+  await tapKey(tester, 'shop.Lidl');
+  final atLidl = groups.values.where((g) => g.entries.any((e) => e.store == 'Lidl')).toList();
+  expect(atLidl, isNotEmpty);
+  for (final g in groups.values) {
+    final shown = find.ancestor(of: find.text(g.name), matching: find.byKey(const Key('priceRow')));
+    if (!atLidl.contains(g)) {
+      expect(shown, findsNothing, reason: '${g.name} was never bought at Lidl');
+    }
+  }
+  for (final g in atLidl.take(3)) {
+    final row = find.ancestor(of: find.text(g.name), matching: find.byKey(const Key('priceRow')));
+    await reveal(tester, row);
+    final meta = tester.widget<Muted>(find.descendant(of: row, matching: find.byKey(const Key('priceMeta')))).text;
+    expect(meta, startsWith('Lidl · '), reason: g.name);
+  }
+  if (shot != null) await shot('prices-lidl');
+  await reveal(tester, find.byKey(const Key('shop.')));
+  await tapKey(tester, 'shop.');
   final banane = groups['banane']!;
-  await tester.tap(find.ancestor(of: find.text(banane.name), matching: find.byKey(const Key('priceRow'))).first);
+  final bananaRow = find.ancestor(of: find.text(banane.name), matching: find.byKey(const Key('priceRow'))).first;
+  await reveal(tester, bananaRow);
+  await tester.tap(bananaRow);
   await tester.pumpAndSettle();
   expect(find.text('${Money.format(banane.entries.first.price)}/kg'), findsWidgets, reason: 'first banana price per kg in the history');
+  expect(find.textContaining(' · ${banane.entries.first.store}'), findsWidgets, reason: 'the shop of each purchase');
   if (shot != null) await shot('prices-banane');
   await tester.pageBack();
   await tester.pumpAndSettle();

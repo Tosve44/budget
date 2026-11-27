@@ -68,6 +68,13 @@ jobs:
         run: |
           psql -h /tmp -p 54329 -U postgres -d budget_test -v ON_ERROR_STOP=1 -c "alter table public.categories drop column icon"
           flutter test test/sync_test.dart --plain-name 'category icons'
+      - name: Sync tests again on a database from before shop names on receipts
+        env:
+          SUPABASE_TEST_URL: http://localhost:54321
+          STORE_COLUMN: 'no'
+        run: |
+          psql -h /tmp -p 54329 -U postgres -d budget_test -v ON_ERROR_STOP=1 -c "alter table public.transactions drop column store"
+          flutter test test/sync_test.dart --plain-name 'the shop on a receipt'
 
   android-build:
     name: Android test app (built once)

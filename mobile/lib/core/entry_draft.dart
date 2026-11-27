@@ -48,7 +48,10 @@ class Comparison {
 
   /// [before] is a price per kilo.
   final bool perKg;
-  const Comparison(this.kind, {this.percent = 0, this.before = 0, this.date = '', this.perKg = false});
+
+  /// The shop of [before] when it is not the shop of this receipt (never bought here yet).
+  final String elsewhere;
+  const Comparison(this.kind, {this.percent = 0, this.before = 0, this.date = '', this.perKg = false, this.elsewhere = ''});
 }
 
 class CheckedEntry {
@@ -71,6 +74,9 @@ class EntryDraft {
   List<DraftLine> lines;
   String? receiptId;
 
+  /// The shop, read from the receipt or typed.
+  String store = '';
+
   EntryDraft({required this.spaceId, this.kind = EntryKind.expense, this.categoryId, required this.date})
     : amountText = '',
       note = '',
@@ -85,7 +91,8 @@ class EntryDraft {
       date = t.date,
       note = t.note,
       lines = (t.items ?? []).map(DraftLine.of).toList(),
-      receiptId = t.receiptId;
+      receiptId = t.receiptId,
+      store = t.store;
 
   /// Receipt lines that have a name; a named line without a readable price is a problem.
   List<ReceiptItem> items() {
@@ -131,6 +138,7 @@ class EntryDraft {
         t.note = note.trim();
         t.items = ok.items;
         t.receiptId = rid;
+        if (kind == EntryKind.expense) t.store = this.store.trim();
       });
       return store.data.transactions.firstWhere((t) => t.id == id);
     }
@@ -143,6 +151,7 @@ class EntryDraft {
       note: note.trim(),
       items: ok.items,
       receiptId: rid,
+      store: kind == EntryKind.expense ? this.store.trim() : '',
     );
   }
 
@@ -153,6 +162,8 @@ class EntryDraft {
     final found = ReceiptParser.parse(text);
     if (found.isNotEmpty) lines = found.map(DraftLine.of).toList();
     final total = ReceiptParser.findTotal(text);
+    final shop = ReceiptParser.findStore(text);
+    if (shop != null && store.trim().isEmpty) store = shop;
     final sum = found.fold(0, (s, it) => s + it.price);
     // A misread digit (5 as 9, 1 as 7) would show up later as a fake price jump.
     mismatch = total != null && found.isNotEmpty && total != sum ? (sum, total) : null;
@@ -174,11 +185,13 @@ class EntryDraft {
     if (it == null || line.name.trim().isEmpty) return null;
     final price = it.perUnit;
     if (price == null) return const Comparison('misread');
-    final prev = store.previousPrice(line.name, date, excluding: existingId);
+    final shop = this.store.trim();
+    final prev = store.previousPrice(line.name, date, excluding: existingId, store: shop);
     if (prev == null) return Comparison('new', perKg: it.unit == 'kg');
     final pct = Money.percentChange(price, prev.price);
     final kg = prev.unit == 'kg';
-    if (pct == null || pct == 0) return Comparison('same', before: prev.price, date: prev.date, perKg: kg);
-    return Comparison(pct > 0 ? 'up' : 'down', percent: pct, before: prev.price, date: prev.date, perKg: kg);
+    final elsewhere = prev.store.isNotEmpty && shop.isNotEmpty && !PriceHistory.sameStore(prev.store, shop) ? prev.store : '';
+    if (pct == null || pct == 0) return Comparison('same', before: prev.price, date: prev.date, perKg: kg, elsewhere: elsewhere);
+    return Comparison(pct > 0 ? 'up' : 'down', percent: pct, before: prev.price, date: prev.date, perKg: kg, elsewhere: elsewhere);
   }
 }
