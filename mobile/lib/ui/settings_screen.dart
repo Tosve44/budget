@@ -53,6 +53,20 @@ class SettingsScreen extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 32),
         children: [
           SectionCard(
+            title: 'Appearance',
+            children: [
+              SegmentedButton<Appearance>(
+                key: const Key('appearancePicker'),
+                segments: [for (final a in Appearance.values) ButtonSegment(value: a, label: Text(a.title))],
+                selected: {model.appearance},
+                showSelectedIcon: false,
+                onSelectionChanged: (s) => model.appearance = s.first,
+              ),
+              const SizedBox(height: 6),
+              const Muted("Automatic follows the phone's light or dark setting. This choice is kept on this phone only."),
+            ],
+          ),
+          SectionCard(
             title: connected ? 'Signed in as ${store.currentUser.name}' : 'Who is using this phone',
             children: [
               if (!connected)
@@ -95,20 +109,6 @@ class SettingsScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => push(const SharingScreen()),
               ),
-            ],
-          ),
-          SectionCard(
-            title: 'Appearance',
-            children: [
-              SegmentedButton<Appearance>(
-                key: const Key('appearancePicker'),
-                segments: [for (final a in Appearance.values) ButtonSegment(value: a, label: Text(a.title))],
-                selected: {model.appearance},
-                showSelectedIcon: false,
-                onSelectionChanged: (s) => model.appearance = s.first,
-              ),
-              const SizedBox(height: 6),
-              const Muted("Automatic follows the phone's light or dark setting. This choice is kept on this phone only."),
             ],
           ),
           SectionCard(
