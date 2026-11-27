@@ -119,6 +119,9 @@ class PriceHistory {
     }
     for (final g in map.values) {
       _stable(g.entries, (a, b) => (a.date + a.createdAt).compareTo(b.date + b.createdAt));
+      // An item sold by weight: a purchase whose weight wasn't read (or was typed without it) has
+      // only the line total, which is not a price per kg. Leave it out rather than show a fake jump.
+      if (g.entries.any((e) => e.unit == 'kg')) g.entries.removeWhere((e) => e.unit != 'kg');
     }
     return map;
   }

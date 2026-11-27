@@ -182,7 +182,8 @@ Future<List<String>> _correct(WidgetTester tester, List<Map<String, dynamic>> wa
 
 /// Every price on the Prices screen must be the real price of one piece / one kilo on that day.
 /// A line whose quantity doesn't add up to its price (something misread that the person can't
-/// see) is left out rather than shown wrong; those are counted in [PriceRun.skipped]. Returns problems.
+/// see), or a weighed item whose weight wasn't read, is left out rather than shown wrong; those
+/// are counted in [PriceRun.skipped]. Returns problems.
 List<String> checkTrends(PriceRun run) {
   final problems = <String>[];
   final groups = PriceHistory.groups(run.model.store.data.transactions);

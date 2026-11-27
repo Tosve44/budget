@@ -149,7 +149,7 @@ function check(name, ok, detail = '') { ok ? pass++ : fail++; out.push(`${ok ? '
     skipped += byDate.size - g.entries.length;
   }
   check('every price in the history is the real one for that day and shop', wrong === 0, `${wrong} wrong`);
-  out.push(`    ${skipped} purchases left out because their quantity line did not add up`);
+  out.push(`    ${skipped} purchases left out because their quantity line did not add up, or the weight was not read`);
 
   // 3. Prices screen: newest price, and the change since the first purchase at the same shop.
   await p.click('[data-tab=prices]');

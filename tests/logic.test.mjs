@@ -360,3 +360,16 @@ test('the shop is kept on an entry, and prices are compared at the same shop', (
   assert.equal(storeTrend(old, 'Spar').change, 10);
   assert.equal(storeTrend([{ price: 100, store: '' }, { price: 120, store: 'Spar' }, { price: 125, store: '' }]).change, 25, 'no shop: every purchase');
 });
+
+test('an item sold by weight: a purchase without its weight is left out of the history', () => {
+  const s = freshStore();
+  const P = 'sp_personal_tosve', G = catId(s, P, 'Groceries');
+  const add = (date, it) => s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: it.price, date, items: [it] });
+  add('2026-06-06', { name: 'BANANE', price: 155, qty: 1.2, unit: 'kg', unitPrice: 129 });
+  add('2026-06-13', { name: 'BANANE', price: 168 }); // weight line not read: 1,68 is the line total
+  add('2026-06-20', { name: 'BANANE', price: 137, qty: 1.04, unit: 'kg', unitPrice: 132 });
+  add('2026-06-20', { name: 'JOGURT', price: 69 });
+  const h = s.itemHistory();
+  assert.deepEqual(h.get('banane').entries.map((e) => e.price), [129, 132]);
+  assert.deepEqual(h.get('jogurt').entries.map((e) => e.price), [69], 'items sold by the piece are not affected');
+});

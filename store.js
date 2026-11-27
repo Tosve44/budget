@@ -231,7 +231,12 @@ export class Store {
         map.get(key).entries.push({ date: t.date, price: pricePerUnit(it), unit: it.unit, store: t.store || '', txId: t.id, spaceId: t.spaceId, createdAt: t.createdAt });
       }
     }
-    for (const g of map.values()) g.entries.sort((a, b) => (a.date + a.createdAt).localeCompare(b.date + b.createdAt));
+    for (const g of map.values()) {
+      g.entries.sort((a, b) => (a.date + a.createdAt).localeCompare(b.date + b.createdAt));
+      // An item sold by weight: a purchase whose weight wasn't read (or was typed without it) has
+      // only the line total, which is not a price per kg. Leave it out rather than show a fake jump.
+      if (g.entries.some((e) => e.unit === 'kg')) g.entries = g.entries.filter((e) => e.unit === 'kg');
+    }
     return map;
   }
 
