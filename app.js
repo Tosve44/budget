@@ -310,11 +310,11 @@ function renderSettings() {
   };
 
   view.innerHTML = `
-    ${syncCardHtml()}
     <section class="card"><h2>Appearance</h2>
       <div class="seg theme-seg" role="radiogroup" aria-label="Appearance">${[['system', 'Automatic'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<button type="button" role="radio" aria-checked="${theme() === v}" data-theme-choice="${v}" class="${theme() === v ? 'on' : ''}">${l}</button>`).join('')}</div>
       <p class="note">Automatic follows the phone's light or dark setting. This choice is kept on this phone only.</p>
     </section>
+    ${syncCardHtml()}
     <section class="card"><h2>Currency</h2>
       <label class="field"><select id="currency" aria-label="Currency">${CURRENCIES.map((c) => `<option ${c === store.data.settings.currency ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
     </section>
