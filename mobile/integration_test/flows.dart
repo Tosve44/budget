@@ -333,7 +333,14 @@ final flows = <String, Future<void> Function(WidgetTester)>{
     await reveal(tester, find.byKey(const Key('chip.Groceries')));
     expect(find.byKey(const Key('chip.Groceries')), findsOneWidget);
     expect(find.byKey(const Key('chip.Nicotine')), findsNothing);
-    await tapKey(tester, 'scanReceipt');
+    // The keyboard (opened for the amount) can move the button while it is tapped; a person would
+    // tap again, and so does this.
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 3 && find.byKey(const Key('premiumScreen')).evaluate().isEmpty; attempt++) {
+      await tapKey(tester, 'scanReceipt');
+      await waitFor(tester, find.byKey(const Key('premiumScreen')), timeout: const Duration(seconds: 5));
+    }
     await reveal(tester, find.byKey(const Key('premiumBecause')));
     expect(find.byKey(const Key('premiumBecause')), findsOneWidget);
     // A failed purchase changes nothing and says so.
