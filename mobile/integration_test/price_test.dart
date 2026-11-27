@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:budget/platform/receipt_reader.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
@@ -31,6 +32,12 @@ void main() {
       final reader = QueueReader((r) async {
         final file = File('${dir.path}/${r['file']}');
         await file.writeAsBytes(base64Decode(pricePhotos[r['file']]!));
+        if (const {'week-02.jpg', 'week-05.jpg', 'week-10.jpg'}.contains(r['file'])) {
+          // What the phone's reader gave on a few receipts, so a misread can be replayed in a unit test.
+          final raw = await const MethodChannel('budget/ocr').invokeListMethod<Map>('read', {'path': file.path, 'rotation': 0});
+          // ignore: avoid_print
+          print('PIECES ${r['file']}: ${jsonEncode(raw)}');
+        }
         return const DeviceReceiptReader().read(file.path).timeout(const Duration(minutes: 2));
       });
       final run = await scanSixMonths(tester, reader);
