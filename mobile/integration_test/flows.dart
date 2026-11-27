@@ -136,6 +136,17 @@ String statText(WidgetTester tester, String label) {
 }
 
 /// Every flow, with a short name. Each one starts the app fresh.
+/// Taps "New category" on the add screen until its form opens. The keyboard (opened for the
+/// amount) can move the chip while it is tapped; a person would tap again, and so does this.
+Future<void> openNewCategory(WidgetTester tester) async {
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpAndSettle();
+  for (var attempt = 0; attempt < 3 && find.byKey(const Key('categoryName')).evaluate().isEmpty; attempt++) {
+    await tapKey(tester, 'chip.new');
+    await waitFor(tester, find.byKey(const Key('categoryName')), timeout: const Duration(seconds: 5));
+  }
+}
+
 final flows = <String, Future<void> Function(WidgetTester)>{
   'tap Income opens the add form for income, and saving shows it': (tester) async {
     final model = await pumpApp(tester);
@@ -340,7 +351,7 @@ final flows = <String, Future<void> Function(WidgetTester)>{
     await tapKey(tester, 'addExpense');
     await typeInto(tester, 'amountField', '12');
     await typeInto(tester, 'noteField', 'vet');
-    await tapKey(tester, 'chip.new');
+    await openNewCategory(tester);
     await typeInto(tester, 'categoryName', 'Dog');
     await tapKey(tester, 'iconField');
     await tapKey(tester, 'iconChoice.🐶');
@@ -356,22 +367,26 @@ final flows = <String, Future<void> Function(WidgetTester)>{
     // The same name again (any case) picks the one that is there, even a hidden one.
     model.store.updateCategory(dog.id, archived: true);
     await tapKey(tester, 'addExpense');
-    await tapKey(tester, 'chip.new');
+    await openNewCategory(tester);
     await typeInto(tester, 'categoryName', ' dog ');
     await tapKey(tester, 'saveCategory');
     expect(model.store.data.categories.where((c) => c.name.toLowerCase() == 'dog').length, 1);
     expect(model.store.category(dog.id)!.archived, isFalse, reason: 'shown again');
     expect(tester.widget<ChoiceChip>(find.byKey(const Key('chip.Dog'))).selected, isTrue);
     // Cancel keeps the form as it was, with nothing picked.
-    await tapKey(tester, 'chip.new');
+    await openNewCategory(tester);
     await tapKey(tester, 'cancelCategory');
     expect(find.byKey(const Key('editorList')), findsOneWidget);
   },
   'free version: the new category chip leads to Premium': (tester) async {
     final model = await pumpApp(tester, plan: Plan.free, purchases: FakePurchases());
     await tapKey(tester, 'addExpense');
-    await tapKey(tester, 'chip.new');
-    await waitFor(tester, find.byKey(const Key('premiumScreen')), timeout: const Duration(seconds: 5));
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 3 && find.byKey(const Key('premiumScreen')).evaluate().isEmpty; attempt++) {
+      await tapKey(tester, 'chip.new');
+      await waitFor(tester, find.byKey(const Key('premiumScreen')), timeout: const Duration(seconds: 5));
+    }
     await reveal(tester, find.byKey(const Key('premiumBecause')));
     expect(find.byKey(const Key('premiumBecause')), findsOneWidget);
     expect(find.byKey(const Key('categoryName')), findsNothing);
