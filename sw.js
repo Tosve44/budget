@@ -1,6 +1,6 @@
 // Offline support: keep a copy of the app files so it opens without internet.
 // Bump VERSION whenever app files change so phones pick up the new version.
-const VERSION = 'budget-v9';
+const VERSION = 'budget-v10';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'store.js', 'photos.js', 'receipt.js', 'sync.js', 'cloud.js', 'config.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
