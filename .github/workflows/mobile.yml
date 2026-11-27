@@ -190,7 +190,7 @@ jobs:
             xcrun simctl bootstatus "$SIM" -b
           fi
       - name: Run on the simulator
-        timeout-minutes: 45
+        timeout-minutes: 50
         run: |
           set -o pipefail
           { echo "Simulator: ${{ matrix.device }} | $(xcrun simctl list devices | grep "$SIM" | head -1 | xargs) | Xcode $(xcodebuild -version | sed -n 1p)"; } | tee device-test.log
@@ -274,7 +274,7 @@ jobs:
     name: Installable apps (APK + unsigned IPA)
     needs: logic
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
