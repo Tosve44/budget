@@ -66,13 +66,16 @@ class ReceiptOcr: NSObject, FlutterPlugin {
     // receipts. Item names are compared without accents, so č/š/ž read as c/s/z does not matter.
     let supported = (try? request.supportedRecognitionLanguages()) ?? []
     request.recognitionLanguages = ["sl-SI", "hr-HR", "de-DE", "en-US"].filter { supported.contains($0) }
-    try VNImageRequestHandler(cgImage: cg, orientation: orientation).perform([request])
+    let handler = VNImageRequestHandler(cgImage: cg, orientation: orientation)
+    try handler.perform([request])
     // Width / height of the photo as Vision reads it (turned), for the row slope in Dart.
     let sideways: Set<CGImagePropertyOrientation> = [.left, .leftMirrored, .right, .rightMirrored]
     let aspect = sideways.contains(orientation)
       ? Double(cg.height) / Double(max(cg.width, 1)) : Double(cg.width) / Double(max(cg.height, 1))
+    let observations = request.results ?? []
+    let (lineHeight, pitch) = ReceiptOcr.lineSize(observations.map { $0.boundingBox })
     var pieces: [[String: Any]] = []
-    for obs in request.results ?? [] {
+    for obs in observations {
       guard let candidate = obs.topCandidates(1).first else { continue }
       let text = candidate.string
       // The observation's own corners are a straight box; the candidate's box for its whole text
@@ -84,8 +87,11 @@ class ReceiptOcr: NSObject, FlutterPlugin {
       let slope = dx > 0 ? -Double(dy / dx) : 0
       // Vision sometimes reads two or more receipt lines of the name column as one piece
       // ("MASLO 250G JAJCA M 10 KOM"), which puts every price below it on the wrong product.
-      // So each word gets its own box, and the words are put back together row by row.
-      for run in ReceiptOcr.rows(of: candidate, text) ?? [(text, obs.boundingBox)] {
+      // Such a piece is taller than one line: that part of the photo is read again, one line at a
+      // time. The lines are used only if together they give back the same text.
+      var runs: [(String, CGRect)] = [(text, obs.boundingBox)]
+      if let split = ReceiptOcr.reread(handler, request, obs.boundingBox, text, lineHeight, pitch) { runs = split }
+      for run in runs {
         // Vision measures from the bottom-left; the Dart side wants the top-left.
         let b = run.1
         pieces.append([
@@ -100,31 +106,80 @@ class ReceiptOcr: NSObject, FlutterPlugin {
     return pieces
   }
 
-  /// The text of a piece split into rows: words whose middles are closer than half a word's
-  /// height are on the same row. nil when Vision cannot give the words' boxes (then the piece is
-  /// used whole, as before).
-  static func rows(of candidate: VNRecognizedText, _ text: String) -> [(String, CGRect)]? {
-    var words: [(String, CGRect)] = []
-    var i = text.startIndex
-    while i < text.endIndex {
-      while i < text.endIndex, text[i].isWhitespace { i = text.index(after: i) }
-      guard i < text.endIndex else { break }
-      var j = i
-      while j < text.endIndex, !text[j].isWhitespace { j = text.index(after: j) }
-      guard let box = (try? candidate.boundingBox(for: i..<j)) ?? nil else { return nil }
-      words.append((String(text[i..<j]), box.boundingBox))
-      i = j
-    }
-    if words.isEmpty { return nil }
+  /// The usual height of one line of text, and the distance from one line to the next, both as
+  /// parts of the photo's height. 0 when there are too few pieces to tell.
+  static func lineSize(_ boxes: [CGRect]) -> (CGFloat, CGFloat) {
+    guard boxes.count >= 3 else { return (0, 0) }
+    let heights = boxes.map { $0.height }.sorted()
+    let h = heights[heights.count / 2]
+    let mids = boxes.filter { $0.height < 1.4 * h }.map { $0.midY }.sorted()
+    var steps: [CGFloat] = []
+    for i in 1..<max(mids.count, 1) where mids[i] - mids[i - 1] > 0.6 * h { steps.append(mids[i] - mids[i - 1]) }
+    guard !steps.isEmpty else { return (h, 0) }
+    steps.sort()
+    // The smallest steps are next lines; bigger ones are blank space on the receipt.
+    let pitch = steps[steps.count / 4]
+    return (h, min(max(pitch, 1.05 * h), 3 * h))
+  }
+
+  /// A piece that covers several lines, read again line by line. nil when the piece is one line,
+  /// or when the lines read again do not give back its text (for example big letters in a header).
+  static func reread(
+    _ handler: VNImageRequestHandler, _ first: VNRecognizeTextRequest, _ box: CGRect, _ text: String,
+    _ lineHeight: CGFloat, _ pitch: CGFloat
+  ) -> [(String, CGRect)]? {
+    guard lineHeight > 0, pitch > 0, box.height > 1.6 * lineHeight else { return nil }
+    let count = Int(((box.height - lineHeight) / pitch).rounded()) + 1
+    guard count >= 2, count <= 12 else { return nil }
     var out: [(String, CGRect)] = []
-    for (word, box) in words {
-      if let last = out.last, abs(last.1.midY - box.midY) < 0.5 * min(last.1.height, box.height) {
-        out[out.count - 1] = (last.0 + " " + word, last.1.union(box))
-      } else {
-        out.append((word, box))
+    for i in 0..<count {
+      // Vision measures from the bottom-left, so line 0 is at the top of the box.
+      let mid = box.maxY - lineHeight / 2 - CGFloat(i) * pitch
+      let core = (mid - pitch / 2)...(mid + pitch / 2)
+      let pad = 0.6 * lineHeight
+      let roi = CGRect(x: box.minX - 0.01, y: mid - lineHeight / 2 - pad, width: box.width + 0.02, height: lineHeight + 2 * pad)
+        .intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+      guard !roi.isNull, roi.width > 0, roi.height > 0 else { return nil }
+      let request = VNRecognizeTextRequest()
+      request.recognitionLevel = .accurate
+      request.usesLanguageCorrection = false
+      request.recognitionLanguages = first.recognitionLanguages
+      request.regionOfInterest = roi
+      guard (try? handler.perform([request])) != nil else { return nil }
+      var line: [(String, CGRect)] = []
+      for obs in request.results ?? [] {
+        guard let t = obs.topCandidates(1).first?.string, !t.isEmpty else { continue }
+        // Boxes come back as parts of the region; turn them into parts of the photo.
+        let r = obs.boundingBox
+        let b = CGRect(
+          x: roi.minX + r.minX * roi.width, y: roi.minY + r.minY * roi.height,
+          width: r.width * roi.width, height: r.height * roi.height)
+        if core.contains(b.midY) { line.append((t, b)) }
+      }
+      line.sort { $0.1.minX < $1.1.minX }
+      out.append(contentsOf: line)
+    }
+    guard out.count >= 2 else { return nil }
+    let again = out.map { $0.0 }.joined(separator: " ")
+    return ReceiptOcr.similar(again, text) ? out : nil
+  }
+
+  /// Two texts are the same apart from a few letters (spaces and case do not count).
+  static func similar(_ a: String, _ b: String) -> Bool {
+    let x = Array(a.lowercased().filter { !$0.isWhitespace })
+    let y = Array(b.lowercased().filter { !$0.isWhitespace })
+    guard !x.isEmpty, !y.isEmpty else { return false }
+    var row = Array(0...y.count)
+    for i in 1...x.count {
+      var prev = row[0]
+      row[0] = i
+      for j in 1...y.count {
+        let keep = row[j]
+        row[j] = x[i - 1] == y[j - 1] ? prev : 1 + min(prev, row[j], row[j - 1])
+        prev = keep
       }
     }
-    return out
+    return Double(row[y.count]) <= 0.2 * Double(max(x.count, y.count))
   }
 }
 
