@@ -219,3 +219,26 @@ test('lowercase tax letters and "g" misread as 9', () => {
     { name: 'Jogurt Ego 150g', price: 69 }, { name: 'Cips Chio 150g', price: 199 },
   ]);
 });
+
+import { categoryIcon, ICON_CHOICES, DEFAULT_ICON } from '../store.js';
+test('category icons: default by name, a chosen icon wins, unknown names get a tag', () => {
+  assert.equal(categoryIcon('Groceries'), '🛒');
+  assert.equal(categoryIcon('  groceries '), '🛒');
+  assert.equal(categoryIcon('Cash (ATM)'), '🏧');
+  assert.equal(categoryIcon('Travel'), '✈️');
+  assert.equal(categoryIcon('Pets'), DEFAULT_ICON);
+  assert.equal(categoryIcon({ name: 'Groceries', icon: '' }), '🛒');
+  assert.equal(categoryIcon({ name: 'Pets', icon: '🐶' }), '🐶');
+  const d = createInitialData();
+  for (const c of d.categories) assert.notEqual(categoryIcon(c), DEFAULT_ICON, `${c.name} has no icon`);
+  assert.equal(ICON_CHOICES.length, 40);
+  assert.equal(new Set(ICON_CHOICES).size, 40);
+});
+
+test('a chosen icon is kept to the database limit and saved with the category', () => {
+  const s = new Store(null);
+  const c = s.addCategory({ spaceId: s.houseSpace().id, name: 'Pets', kind: 'expense', icon: '🐶' });
+  assert.equal(s.category(c.id).icon, '🐶');
+  s.updateCategory(c.id, { icon: 'x'.repeat(40) });
+  assert.ok(s.category(c.id).icon.length <= 16);
+});

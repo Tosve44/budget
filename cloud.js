@@ -22,12 +22,24 @@ function loadScript(src) {
   });
 }
 
+// On bad Wi-Fi a request can hang without ever failing. Give up after a while, so syncing is
+// never stuck: the app shows "offline" and tries again later.
+function fetchWithTimeout(input, init = {}) {
+  const url = String(input?.url || input);
+  const ms = url.includes('/storage/') ? 90000 : 20000;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(new DOMException('The connection timed out.', 'TimeoutError')), ms);
+  init.signal?.addEventListener('abort', () => ctrl.abort(init.signal.reason));
+  return fetch(input, { ...init, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
 export async function startCloud(store) {
   const cfg = config();
   if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) return null;
   if (!window.supabase) await loadScript(new URL('vendor/supabase/supabase.js', import.meta.url).href);
   const client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
     auth: { persistSession: true, autoRefreshToken: true, storageKey: 'budget.auth' },
+    global: { fetch: fetchWithTimeout },
   });
   const sync = new Sync({ store, client, photos: { get: getPhoto, put: putPhoto, del: deletePhoto } });
 

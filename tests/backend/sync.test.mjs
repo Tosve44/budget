@@ -292,3 +292,32 @@ test('signing out and back in on the same phone: nothing duplicated, authors kep
   for (const t of M.store.data.transactions) assert.equal(t.createdBy, authors.get(t.id));
   assert.equal(M.sync.pendingCount(), 0);
 });
+
+test('a category icon chosen on one phone shows on the other', async () => {
+  const s = T.store;
+  const c = s.addCategory({ spaceId: s.houseSpace().id, name: `Pets ${run}`, kind: 'expense', icon: '🐶' });
+  await T.sync.syncNow(); await M.sync.syncNow();
+  assert.equal(M.store.category(c.id)?.icon, '🐶');
+  M.store.updateCategory(c.id, { icon: '' });
+  await M.sync.syncNow(); await T.sync.syncNow();
+  assert.equal(T.store.category(c.id).icon, '', 'going back to the automatic icon syncs too');
+});
+
+test('before the icon column exists in the cloud, categories still sync (without the icon)', { skip: !FAKE && 'needs the local test database' }, async () => {
+  const { Client } = require('pg');
+  const db = new Client({ connectionString: process.env.PGURL || 'postgres://postgres@/budget_test?host=/tmp&port=54329' });
+  await db.connect();
+  await db.query('alter table public.categories drop column icon');
+  try {
+    const s = T.store;
+    const c = s.addCategory({ spaceId: s.houseSpace().id, name: `Garden ${run}`, kind: 'expense', icon: '🌱' });
+    await T.sync.syncNow();
+    assert.equal(T.sync.pendingCount(), 0, 'uploaded');
+    await M.sync.syncNow();
+    assert.ok(M.store.category(c.id), 'arrived on the other phone');
+    assert.equal(T.store.category(c.id).icon, '🌱', 'icon kept on the phone that chose it');
+  } finally {
+    await db.query("alter table public.categories add column if not exists icon text not null default '' check (char_length(icon) <= 16)");
+    await db.end();
+  }
+});

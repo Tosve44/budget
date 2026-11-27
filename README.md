@@ -36,3 +36,11 @@ Backend tests need a local Postgres 16 and `npm i pg @supabase/supabase-js` some
 - `node --test tests/logic.test.mjs`: money parsing, budgets and totals, price comparison, backup/restore, receipt text parsing.
 - `python3 -m http.server 8123 & node tests/e2e.cjs`: click-through tests on iPhone SE, 13 and 14 Pro Max screen sizes
   (Chromium with iPhone emulation), including reading the sample receipt photos in `tests/`.
+- `node tests/e2e-edge.cjs` (with the test server running, `npm i axe-core`): odd inputs, month edges, double taps,
+  full or damaged phone storage, 5 years of data, tap-target sizes, large text, landscape, accessibility scan.
+- `node tests/e2e-money.cjs`: Income / Spent / Balance / budget numbers checked against a separate calculation,
+  including a 200-step random sequence.
+- `node tests/e2e-network.cjs`: slow 3G, requests that hang, flaky connections, and two phones changing the same
+  entry or category while offline.
+- `node --test tests/backend/attack.test.mjs`: tries to get around the privacy rules through the public API (signed out,
+  a stranger with an account, the partner). Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` to run it against the real project.

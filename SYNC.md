@@ -54,6 +54,12 @@ of truth. This page explains how a client (web or native) is expected to use it.
    seen. `server_updated_at` is the server clock, so phone clock differences don't lose rows.
 5. **Merge:** for each pulled row, keep the local row if it is dirty and newer. Otherwise take
    the server row. A row with `deleted = true` is removed locally.
+   Then merge duplicate categories (same space, kind and `name.trim().toLocaleLowerCase()`, only
+   `archived = false`): keep the lowest id, re-point entries to it (marked dirty), and upload the
+   others as deleted. Both phones choose the same one, so they agree.
+   Keep rows within the database limits on the phone (amount < 1,000,000,000 cents, note ≤ 500,
+   category name ≤ 60, ≤ 300 items with names ≤ 120): one row over a limit fails its whole chunk.
+   Give up on a request after 20 s (90 s for photo uploads) so a hung connection never stalls sync.
 6. **When it runs:** after a local change (1.2 s debounce), when the app comes to the foreground,
    when the connection returns, and every 30 s while the app is open.
 
@@ -80,6 +86,8 @@ the signed-in user as author. Rows already in the cloud (same id) are not duplic
 ## Testing
 - `tests/backend/rls.test.cjs`: privacy rules against a real Postgres (19 checks).
 - `tests/backend/sync.test.mjs`: two simulated phones syncing with supabase-js (19 checks).
+- `tests/backend/attack.test.mjs`: privacy attacks through the public API, also run against the live project (15 checks).
+- `tests/e2e-network.cjs`: bad internet and two-phone conflicts with the real app screens (9 checks).
 - `tests/e2e-sync.cjs`: two iPhone-sized browsers using the real app screens (14 checks).
 - `tests/backend/fake-supabase.cjs`: a local stand-in for Supabase that runs requests on
   Postgres as the signed-in user. Use it for offline testing only. Point `SUPABASE_URL` and

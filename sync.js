@@ -16,13 +16,15 @@ export function categoryToRow(c) {
   return {
     id: c.id, space_id: c.spaceId, name: c.name, kind: c.kind, budget: c.budget || 0,
     sort_order: c.order || 0, archived: !!c.archived, deleted: !!c.deleted,
-    updated_at: c.updatedAt || '2000-01-01T00:00:00.000Z',
+    updated_at: c.updatedAt || '2000-01-01T00:00:00.000Z', icon: c.icon || '',
   };
 }
 export function rowToCategory(r) {
   return {
     id: r.id, spaceId: r.space_id, name: r.name, kind: r.kind, budget: Number(r.budget),
     order: r.sort_order, archived: r.archived, updatedAt: iso(r.updated_at),
+    // (No icon column in the cloud yet: leave the phone's own icon alone.)
+    ...('icon' in r ? { icon: r.icon || '' } : {}),
   };
 }
 export function txToRow(t, receiptPath) {
@@ -320,7 +322,12 @@ export class Sync {
       if (!rows.length) continue;
       for (let i = 0; i < rows.length; i += 200) {
         const chunk = rows.slice(i, i + 200);
-        const { data, error } = await this.client.from(table).upsert(chunk, { onConflict: 'id' }).select('id');
+        let { data, error } = await this.client.from(table).upsert(chunk, { onConflict: 'id' }).select('id');
+        if (error && table === 'categories' && /icon/.test(error.message || '') && /column|schema/i.test(error.message || '')) {
+          // The cloud database doesn't have the icon column yet (its update has not been run):
+          // upload without icons, so syncing keeps working. Icons stay on this phone.
+          ({ data, error } = await this.client.from(table).upsert(chunk.map(({ icon, ...r }) => r), { onConflict: 'id' }).select('id'));
+        }
         if (error) throw friendly(error);
         // The server ignores an edit that is older than its own copy (the partner changed it
         // later). Fetch the winning version of those rows so this phone shows it.
@@ -391,8 +398,40 @@ export class Sync {
     }
     if (this.applyRows('categories', results.categories, { save: false })) changed = true;
     if (this.applyRows('transactions', results.transactions, { save: false })) changed = true;
+    if (this.mergeDuplicateCategories()) changed = true;
     this.saveMeta();
     if (changed) this.store.replaceData(d);
+  }
+
+  // Both phones added a category with the same name (for example both offline). Keep one,
+  // move the entries to it and delete the other. Both phones pick the same one (lowest id),
+  // so they agree without talking to each other. Hidden categories are left alone.
+  mergeDuplicateCategories() {
+    const d = this.store.data;
+    const groups = new Map();
+    for (const c of d.categories) {
+      if (c.archived) continue;
+      const k = `${c.spaceId}\n${c.kind}\n${c.name.trim().toLocaleLowerCase()}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(c);
+    }
+    const now = new Date().toISOString();
+    let changed = false;
+    for (const list of groups.values()) {
+      if (list.length < 2) continue;
+      list.sort((a, b) => (a.id < b.id ? -1 : 1));
+      const [keep, ...dups] = list;
+      for (const dup of dups) {
+        if (!keep.budget && dup.budget) { keep.budget = dup.budget; keep.updatedAt = now; this.markDirty('categories', keep.id); }
+        for (const t of d.transactions) {
+          if (t.categoryId === dup.id) { t.categoryId = keep.id; t.updatedAt = now; this.markDirty('transactions', t.id); }
+        }
+        d.categories = d.categories.filter((c) => c !== dup);
+        this.markDirty('categories', dup.id, { ...dup, updatedAt: now });
+        changed = true;
+      }
+    }
+    return changed;
   }
 
   // Merge rows from the cloud into the phone's copy. A row this phone changed more recently
@@ -457,6 +496,6 @@ export function friendly(e) {
   if (/household is full/i.test(msg)) return new Error('That household already has two people.');
   if (/already in a household/i.test(msg)) return new Error('This account is already in a household.');
   if (/Email not confirmed/i.test(msg)) return new Error('Please confirm your email first (check your inbox), then sign in.');
-  if (/Failed to fetch|NetworkError|Load failed|network/i.test(msg)) return new Error('No connection. Your changes are saved on this phone and will sync later.');
+  if (/Failed to fetch|NetworkError|Load failed|network|timed out|aborted/i.test(msg)) return new Error('No connection. Your changes are saved on this phone and will sync later.');
   return e instanceof Error ? e : new Error(msg);
 }

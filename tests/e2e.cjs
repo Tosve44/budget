@@ -26,6 +26,7 @@ const money = (s) => Number(String(s).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{
     const tab = (t) => p.click(`[data-tab=${t}]`);
     const addEntry = async ({ amount, cat, kind = 'expense', date, note }) => {
       await p.click('#addBtn');
+      await p.waitForFunction(() => document.activeElement?.id === 'amount'); // the app focuses it right after opening
       if (kind === 'income') await p.click('.seg [data-kind=income]');
       await p.fill('#amount', amount);
       await p.locator('[data-chip]', { hasText: cat }).first().click();
@@ -62,7 +63,8 @@ const money = (s) => Number(String(s).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{
       const vals = await p.$$eval('.stat .val', (els) => els.map((e) => e.textContent));
       assert(money(vals[0]) === 2100, `income ${vals[0]}`);
       assert(Math.abs(money(vals[1]) - 637.3) < 0.001, `spent ${vals[1]}`);
-      assert(money(vals[2]) === 830, `budget ${vals[2]}`);
+      assert(Math.abs(money(vals[2]) - (2100 - 637.3)) < 0.001, `balance ${vals[2]}`);
+      assert(/830/.test(await p.textContent('.summary-main')), 'budget total shown in the summary');
       const left = await p.textContent('.big');
       assert(Math.abs(money(left) - 192.7) < 0.001, `left ${left}`);
     });

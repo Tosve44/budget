@@ -39,32 +39,47 @@ async function getWorker(lang, onProgress) {
 }
 
 // Turn a photo into text lines. `lang` is e.g. "eng" or "srp_latn+eng".
+// If the first try finds (almost) nothing, the photo may be sideways, upside down or half in
+// shadow, so it is tried again those ways and the reading with the most items wins.
 export async function readReceiptText(blob, lang = 'eng', onProgress) {
-  const w = await getWorker(lang, onProgress);
-  const { data } = await w.recognize(await prepareForReading(blob));
-  return data.text;
+  const w = await getWorker(lang, (p) => onProgress && onProgress(p, attempt));
+  const tries = [{}, { rotate: 90 }, { rotate: 270 }, { even: true }, { rotate: 180 }];
+  let attempt = 0;
+  let best = null;
+  for (const t of tries) {
+    const { data } = await w.recognize(await prepareForReading(blob, t));
+    const n = parseReceipt(data.text).length;
+    if (!best || n > best.n) best = { n, text: data.text };
+    if (n >= 3 || (n >= 1 && findTotal(data.text))) break;
+    attempt++;
+  }
+  return best.text;
 }
 
 // Make the photo easier to read: grey scale, stretch the contrast (faded or grey thermal paper),
 // and enlarge small photos. The saved receipt photo is not changed.
-export async function prepareForReading(blob) {
+// rotate: turn the photo by 90/180/270 degrees first. even: even out uneven light (a shadow
+// across the receipt) instead of cutting the receipt out of its background.
+export async function prepareForReading(blob, { rotate = 0, even = false } = {}) {
   try {
     const bmp = await createImageBitmap(blob);
-    const scale = Math.min(2, Math.max(1, 1400 / bmp.width));
+    const side = rotate % 180 ? bmp.height : bmp.width;
+    const scale = Math.min(2, Math.max(1, 1400 / side));
     const c = document.createElement('canvas');
-    c.width = Math.round(bmp.width * scale);
-    c.height = Math.round(bmp.height * scale);
+    c.width = Math.round((rotate % 180 ? bmp.height : bmp.width) * scale);
+    c.height = Math.round((rotate % 180 ? bmp.width : bmp.height) * scale);
     const ctx = c.getContext('2d', { willReadFrequently: true });
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(bmp, 0, 0, c.width, c.height);
+    ctx.translate(c.width / 2, c.height / 2);
+    ctx.rotate((rotate * Math.PI) / 180);
+    ctx.drawImage(bmp, (-bmp.width * scale) / 2, (-bmp.height * scale) / 2, bmp.width * scale, bmp.height * scale);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     const img = ctx.getImageData(0, 0, c.width, c.height);
     const px = img.data;
+    for (let i = 0; i < px.length; i += 4) px[i] = (px[i] * 299 + px[i + 1] * 587 + px[i + 2] * 114) / 1000 | 0;
+    if (even) evenOutLight(px, c.width, c.height);
     const hist = new Uint32Array(256);
-    for (let i = 0; i < px.length; i += 4) {
-      const g = (px[i] * 299 + px[i + 1] * 587 + px[i + 2] * 114) / 1000 | 0;
-      px[i] = g;
-      hist[g]++;
-    }
+    for (let i = 0; i < px.length; i += 4) hist[px[i]]++;
     // Ignore the darkest/lightest 1% so the table around the receipt doesn't skew the stretch.
     const n = px.length / 4;
     let lo = 0, hi = 255, acc = 0;
@@ -77,10 +92,47 @@ export async function prepareForReading(blob) {
       px[i] = px[i + 1] = px[i + 2] = v;
     }
     ctx.putImageData(img, 0, 0);
-    const out = cropToPaper(straighten(c));
+    const out = even ? straighten(c) : cropToPaper(straighten(c));
     return await new Promise((resolve) => out.toBlob((b) => resolve(b || blob), 'image/png'));
   } catch {
     return blob;
+  }
+}
+
+// Divide each pixel by the brightness of the paper around it, so a shadow over part of the
+// receipt no longer looks like dark ink. The paper brightness is the brightest value in
+// each 32×32 block (text is thin, so blocks always contain some paper), smoothed out.
+function evenOutLight(px, w, h) {
+  const B = 32, bw = Math.ceil(w / B), bh = Math.ceil(h / B);
+  const bg = new Float32Array(bw * bh);
+  for (let by = 0; by < bh; by++) {
+    for (let bx = 0; bx < bw; bx++) {
+      let m = 0;
+      for (let y = by * B; y < Math.min(h, by * B + B); y += 2) {
+        for (let x = bx * B; x < Math.min(w, bx * B + B); x += 2) { const v = px[(y * w + x) * 4]; if (v > m) m = v; }
+      }
+      bg[by * bw + bx] = m;
+    }
+  }
+  const sm = new Float32Array(bw * bh);
+  for (let by = 0; by < bh; by++) {
+    for (let bx = 0; bx < bw; bx++) {
+      let s = 0, k = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const yy = by + dy, xx = bx + dx;
+        if (yy >= 0 && yy < bh && xx >= 0 && xx < bw) { s += bg[yy * bw + xx]; k++; }
+      }
+      sm[by * bw + bx] = s / k;
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    const fy = Math.min(bh - 1, Math.max(0, y / B - 0.5)), y0 = Math.floor(fy), y1 = Math.min(bh - 1, y0 + 1), ty = fy - y0;
+    for (let x = 0; x < w; x++) {
+      const fx = Math.min(bw - 1, Math.max(0, x / B - 0.5)), x0 = Math.floor(fx), x1 = Math.min(bw - 1, x0 + 1), tx = fx - x0;
+      const b = (sm[y0 * bw + x0] * (1 - tx) + sm[y0 * bw + x1] * tx) * (1 - ty) + (sm[y1 * bw + x0] * (1 - tx) + sm[y1 * bw + x1] * tx) * ty;
+      const i = (y * w + x) * 4;
+      px[i] = Math.min(255, (px[i] * 255) / Math.max(30, b)) | 0;
+    }
   }
 }
 
