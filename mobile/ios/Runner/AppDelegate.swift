@@ -71,11 +71,10 @@ class ReceiptOcr: NSObject, FlutterPlugin {
     let sideways: Set<CGImagePropertyOrientation> = [.left, .leftMirrored, .right, .rightMirrored]
     let aspect = sideways.contains(orientation)
       ? Double(cg.height) / Double(max(cg.width, 1)) : Double(cg.width) / Double(max(cg.height, 1))
-    return (request.results ?? []).compactMap { obs in
-      guard let candidate = obs.topCandidates(1).first else { return nil }
+    var pieces: [[String: Any]] = []
+    for obs in request.results ?? [] {
+      guard let candidate = obs.topCandidates(1).first else { continue }
       let text = candidate.string
-      // Vision measures from the bottom-left; the Dart side wants the top-left.
-      let b = obs.boundingBox
       // The observation's own corners are a straight box; the candidate's box for its whole text
       // follows the tilt of a photo taken at an angle. If Vision cannot give it, the slope is 0
       // and the Dart side works it out from the rows.
@@ -83,14 +82,49 @@ class ReceiptOcr: NSObject, FlutterPlugin {
       let dx = (quad?.bottomRight.x ?? 0) - (quad?.bottomLeft.x ?? 0)
       let dy = (quad?.bottomRight.y ?? 0) - (quad?.bottomLeft.y ?? 0)
       let slope = dx > 0 ? -Double(dy / dx) : 0
-      return [
-        "text": text,
-        "minX": Double(b.minX), "minY": Double(1 - b.maxY),
-        "maxX": Double(b.maxX), "maxY": Double(1 - b.minY),
-        "slope": slope,
-        "aspect": aspect,
-      ]
+      // Vision sometimes reads two or more receipt lines of the name column as one piece
+      // ("MASLO 250G JAJCA M 10 KOM"), which puts every price below it on the wrong product.
+      // So each word gets its own box, and the words are put back together row by row.
+      for run in ReceiptOcr.rows(of: candidate, text) ?? [(text, obs.boundingBox)] {
+        // Vision measures from the bottom-left; the Dart side wants the top-left.
+        let b = run.1
+        pieces.append([
+          "text": run.0,
+          "minX": Double(b.minX), "minY": Double(1 - b.maxY),
+          "maxX": Double(b.maxX), "maxY": Double(1 - b.minY),
+          "slope": slope,
+          "aspect": aspect,
+        ])
+      }
     }
+    return pieces
+  }
+
+  /// The text of a piece split into rows: words whose middles are closer than half a word's
+  /// height are on the same row. nil when Vision cannot give the words' boxes (then the piece is
+  /// used whole, as before).
+  static func rows(of candidate: VNRecognizedText, _ text: String) -> [(String, CGRect)]? {
+    var words: [(String, CGRect)] = []
+    var i = text.startIndex
+    while i < text.endIndex {
+      while i < text.endIndex, text[i].isWhitespace { i = text.index(after: i) }
+      guard i < text.endIndex else { break }
+      var j = i
+      while j < text.endIndex, !text[j].isWhitespace { j = text.index(after: j) }
+      guard let box = (try? candidate.boundingBox(for: i..<j)) ?? nil else { return nil }
+      words.append((String(text[i..<j]), box.boundingBox))
+      i = j
+    }
+    if words.isEmpty { return nil }
+    var out: [(String, CGRect)] = []
+    for (word, box) in words {
+      if let last = out.last, abs(last.1.midY - box.midY) < 0.5 * min(last.1.height, box.height) {
+        out[out.count - 1] = (last.0 + " " + word, last.1.union(box))
+      } else {
+        out.append((word, box))
+      }
+    }
+    return out
   }
 }
 
