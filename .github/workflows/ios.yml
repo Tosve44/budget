@@ -1,0 +1,88 @@
+# Builds and tests the iPhone app on every change. Runs on GitHub's free machines
+# (free and unlimited for public repositories).
+name: iPhone app
+
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", "store.js", "receipt.js", "sync.js", "supabase/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**", "store.js", "receipt.js", "sync.js", "supabase/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+# A newer push replaces a run that is still going.
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  logic-and-sync:
+    name: Logic + sync tests (Linux)
+    runs-on: ubuntu-24.04
+    container: swift:6.0-noble
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install PostgreSQL
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-16 curl ca-certificates >/dev/null
+      - name: Golden files still match the web app
+        run: |
+          node ios/scripts/make-golden.mjs .
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git diff --exit-code --stat ios/Tests/BudgetKitTests/Fixtures || echo "::warning::The web app's logic changed; golden files were regenerated for this run."
+      - name: Start the test database and fake Supabase
+        run: ios/scripts/start-test-backend.sh .
+      - name: swift test
+        working-directory: ios
+        env:
+          SUPABASE_TEST_URL: http://localhost:54321
+          WEB_APP_DIR: ${{ github.workspace }}
+          NODE_MODULES_DIR: /tmp/budget-test-backend/node_modules
+          WEBPHONE_SCRIPT: ${{ github.workspace }}/ios/scripts/webphone.mjs
+        run: swift test
+
+  iphone:
+    name: iPhone app (${{ matrix.name }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: small iPhone
+            device: iPhone-SE-3rd-generation
+          - name: large iPhone
+            device: iPhone-16-Pro-Max
+          - name: iOS 17
+            device: iPhone-15
+            ios: iOS-17-5
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - name: Generate the Xcode project
+        working-directory: ios/App
+        run: xcodegen
+      - name: Logic tests on macOS
+        working-directory: ios
+        run: swift test
+      - name: Build and run the UI tests
+        if: success() || failure()
+        working-directory: ios/App
+        run: |
+          set -o pipefail
+          SIM="$(../scripts/ci-simulator.sh ${{ matrix.device }} ${{ matrix.ios }})"
+          xcodebuild test -project Budget.xcodeproj -scheme Budget \
+            -destination "id=$SIM" \
+            -resultBundlePath TestResults.xcresult CODE_SIGNING_ALLOWED=NO > xcodebuild.log 2>&1 || {
+              grep -E "error:|: failed|Failing tests|^\s+-\[|\*\* " xcodebuild.log | head -200; tail -40 xcodebuild.log; exit 1; }
+          grep -E "Executed|\*\* " xcodebuild.log | tail -10
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.name }}
+          path: |
+            ios/App/TestResults.xcresult
+            ios/App/xcodebuild.log
