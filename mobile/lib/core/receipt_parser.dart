@@ -275,7 +275,12 @@ class TextLines {
     final rowH = <double>[];
     for (final p in ps) {
       final last = rows.length - 1;
-      if (last >= 0 && (y(p) - rowY[last]).abs() < 0.5 * (rowH[last] < p.height ? rowH[last] : p.height)) {
+      // Two pieces above each other in the same column are never one row, whatever the slope:
+      // otherwise a wrong slope can stack two item names ("MASLO 250G JAJCA M 10 KOM") into
+      // one line, which puts every price below it on the wrong item.
+      if (last >= 0 &&
+          (y(p) - rowY[last]).abs() < 0.5 * (rowH[last] < p.height ? rowH[last] : p.height) &&
+          !rows[last].any((q) => _overlapX(p, q))) {
         rows[last].add(p);
         final n = rows[last].length;
         rowY[last] = (rowY[last] * (n - 1) + y(p)) / n;
@@ -287,6 +292,13 @@ class TextLines {
       }
     }
     return rows;
+  }
+
+  /// The two pieces share more than a little of their width.
+  static bool _overlapX(TextPiece a, TextPiece b) {
+    final overlap = (a.maxX < b.maxX ? a.maxX : b.maxX) - (a.minX > b.minX ? a.minX : b.minX);
+    final narrow = (a.maxX - a.minX) < (b.maxX - b.minX) ? a.maxX - a.minX : b.maxX - b.minX;
+    return overlap > 0.3 * narrow;
   }
 
   /// The slope of the rows worked out from the left edge of the text: on a photo taken at an

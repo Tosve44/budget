@@ -69,4 +69,19 @@ void main() {
       expect(lines, containsAllInOrder([first, second]), reason: lines.join('\n'));
     });
   }
+
+  // Apple's reader on three of the six-month receipt photos (iPhone 17 Pro simulator, iOS 26).
+  // Each piece is one line, but a wrong slope used to stack two item names into one row
+  // ("MASLO ZELENE DOLINE 250G JAJCA M 10 KOM"), which moved every price below onto the wrong item.
+  for (final (photo, lines) in [
+    ('week-02', ['JAJCA M 10 KOM 2,89 C', 'MASLO ZELENE DOLINE 250G 2,55 C', '1,145 kg x 1,47 1,68 C', 'JOGURT NAVADNI 180G 0,59 C']),
+    ('week-05', ['PIŠČANČJE PRSI', '1,314 kg x 10,29 13,52 C', 'KRUH BELI 500G 1,49 C', 'BANANE', '0,880 kg x 1,45 1,28 C']),
+    ('week-10', ['MASLO ZELENE DOLINE 250G 2,77 C', 'BANANE', '0,918 kg x 1,41 1,29 C', 'JOGURT NAVADNI 180G 0,59 С']),
+  ]) {
+    test('the iPhone reading of $photo.jpg keeps one item per line', () {
+      final raw = jsonDecode(File('test/fixtures/pieces/ios-$photo.json').readAsStringSync()) as List;
+      final got = TextLines.assemble(raw.map((m) => TextPiece.fromMap(m as Map)).toList()).split('\n');
+      expect(got, containsAllInOrder(lines), reason: got.join('\n'));
+    });
+  }
 }
