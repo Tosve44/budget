@@ -373,3 +373,12 @@ test('an item sold by weight: a purchase without its weight is left out of the h
   assert.deepEqual(h.get('banane').entries.map((e) => e.price), [129, 132]);
   assert.deepEqual(h.get('jogurt').entries.map((e) => e.price), [69], 'items sold by the piece are not affected');
 });
+
+test('a weight line whose price of one kilo is at the end is a quantity, not a product', () => {
+  // As the phone's text reader gave them (Android CI): "1, 36" with a space, and no line total.
+  assert.deepEqual(parseReceipt('BANANE 1,68\n1,238 kg x 1, 36\nMLEKO 1,19'), [
+    { name: 'BANANE', price: 168, qty: 1.238, unit: 'kg', unitPrice: 136 }, { name: 'MLEKO', price: 119 }]);
+  assert.deepEqual(parseReceipt('PIŠČANČJE PRSI 12,24\n1,182 kg x 10,36\nKRUH 1,79'), [
+    { name: 'PIŠČANČJE PRSI', price: 1224, qty: 1.182, unit: 'kg', unitPrice: 1036 }, { name: 'KRUH', price: 179 }]);
+  assert.deepEqual(parseReceipt('2 kom x 0,59\nJOGURT 1,18'), [{ name: 'JOGURT', price: 118, qty: 2, unitPrice: 59 }]);
+});

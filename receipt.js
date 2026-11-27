@@ -224,14 +224,15 @@ function fixName(name) {
 // "2 x 0,59", "0,856 kg x 1,49", "350 g x 12,99": how many (or how much) and the price of one
 // (or of a kilo). Returns null when the line doesn't say.
 function readQuantity(text) {
-  const m = String(text).match(/^([\d.,]+)\s*(kom|kos|kg|g|pcs|st)?\.?\s*[x×*]\s*([\d.,]+)/i);
+  // The price of one may be read with a space after the comma ("1, 36").
+  const m = String(text).match(/^([\d.,]+)\s*(kom|kos|kg|g|pcs|st)?\.?\s*[x×*]\s*(\d[\d.,]*[.,;:]\s\d{2}(?!\d)|[\d.,]+)/i);
   if (!m) return null;
   let qty = Number(m[1].replace(',', '.'));
   const unitWord = (m[2] || '').toLowerCase();
   if (unitWord === 'g') qty /= 1000;
   if (!(qty > 0) || qty > 999 || qty === 1) return null;
   const byWeight = unitWord === 'kg' || unitWord === 'g' || !Number.isInteger(qty);
-  const each = toCents(m[3].replace(/[;:]/g, ','));
+  const each = toCents(m[3].replace(/[;:]/g, ',').replace(/\s/g, ''));
   return { qty: Math.round(qty * 1000) / 1000, unit: byWeight ? 'kg' : undefined, unitPrice: Number.isFinite(each) && each > 0 ? each : undefined };
 }
 
@@ -288,6 +289,9 @@ export function parseReceipt(text) {
     const price = toCents(m[1].replace(/[;:]/g, ',').replace(/ /g, ''));
     if (!Number.isFinite(price) || price <= 0) continue;
     // Quantity lines like "2 x 1,29" or "0,750 kg x 199,99": the product name is usually on the line above.
+    // "0,620 kg x 1,85": the number at the end is the price of one kilo, not a line total. It is a
+    // quantity line (used below), not a product called "kg x".
+    if (/^[\d.,]+\s*(kom|kos|kg|g|pcs|st)\.?\s*[x×*]$/i.test(name)) continue;
     const qtyOnly = /^[\d.,]+\s*(kom|kg|g|l|pcs|st)?\s*[x×*]\s*[\d.,]+/i.test(name);
     if (!qtyOnly && !/\p{L}{2,}/u.test(name)) continue; // e.g. a date and time "25.11.2026 10:15"
     let amount = null;

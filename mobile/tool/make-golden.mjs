@@ -86,6 +86,26 @@ for (let i = 0; i < 1500; i++) {
   receipts.push({ text, items: receipt.parseReceipt(text), total: receipt.findTotal(text), store: receipt.findStore(text) });
 }
 seed = keep;
+// Weight and count lines as phone text readers give them: no line total, sometimes a space after
+// the comma ("1,238 kg x 1, 36"), above or below the product.
+const seedBefore = seed;
+seed = 20261130;
+for (let i = 0; i < 400; i++) {
+  const lines = [];
+  for (let k = 0; k < int(1, 6); k++) {
+    const nm = pick(names), each = int(10, 2000), byKg = rnd() < 0.6;
+    const q = byKg ? int(100, 2500) / 1000 : int(2, 6);
+    const total = Math.round(q * each) + (rnd() < 0.15 ? int(-50, 50) : 0);
+    const eachText = `${Math.floor(each / 100)},${rnd() < 0.3 ? ' ' : ''}${String(each % 100).padStart(2, '0')}`;
+    const qLine = `${String(q).replace('.', ',')} ${byKg ? pick(['kg', 'KG', 'kg.']) : pick(['kom', 'KOS', ''])} ${pick(['x', 'X', '*', '×'])} ${eachText}${rnd() < 0.2 ? ' EUR/kg' : ''}`;
+    const item = `${nm} ${Math.floor(total / 100)},${String(Math.abs(total) % 100).padStart(2, '0')}${rnd() < 0.3 ? ' B' : ''}`;
+    if (rnd() < 0.5) lines.push(item, qLine); else lines.push(qLine, item);
+  }
+  if (rnd() < 0.5) lines.push(`SKUPAJ EUR ${price()}`);
+  const text = lines.join('\n');
+  receipts.push({ text, items: receipt.parseReceipt(text), total: receipt.findTotal(text), store: receipt.findStore(text) });
+}
+seed = seedBefore; // the files below stay as they were
 writeFileSync(`${out}/receipts.json`, JSON.stringify(receipts));
 
 // ---------- money typing ----------

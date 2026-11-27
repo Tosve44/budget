@@ -34,13 +34,18 @@ class ReceiptParser {
   static final _semi = RegExp(r'[;:]');
   static final _junk = RegExp(r'[|_~*#"]+');
   static final _leadingNumbers = RegExp(r'^[\d.,\s]+(?=\p{L})', unicode: true);
+  static final _unitPriceLine = RegExp(r'^[\d.,]+\s*(kom|kos|kg|g|pcs|st)\.?\s*[x×*]$', caseSensitive: false);
   static final _quantityOnly = RegExp(r'^[\d.,]+\s*(kom|kg|g|l|pcs|st)?\s*[x×*]\s*[\d.,]+', caseSensitive: false);
   static final _twoLetters = RegExp(r'\p{L}{2,}', unicode: true);
   static final _gramMisread = RegExp(r'\b(\d*[1-9]0{1,2})[69]\b');
   static final _litreDecimal = RegExp(r'\b(\d,\d{1,2})1\b');
   static final _litreAfterPercent = RegExp(r'(%\s?)11\b');
   static final _litreAtEnd = RegExp(r'\b11$');
-  static final _quantity = RegExp(r'^([\d.,]+)\s*(kom|kos|kg|g|pcs|st)?\.?\s*[x×*]\s*([\d.,]+)', caseSensitive: false);
+  // The price of one may be read with a space after the comma ("1, 36").
+  static final _quantity = RegExp(
+    r'^([\d.,]+)\s*(kom|kos|kg|g|pcs|st)?\.?\s*[x×*]\s*(\d[\d.,]*[.,;:]\s\d{2}(?!\d)|[\d.,]+)',
+    caseSensitive: false,
+  );
 
   /// JavaScript's String.prototype.trim.
   static String jsTrim(String s) => s.replaceAll(_trim, '');
@@ -74,7 +79,7 @@ class ReceiptParser {
     if (unitWord == 'g') qty /= 1000;
     if (!(qty > 0) || qty > 999 || qty == 1) return null;
     final byWeight = unitWord == 'kg' || unitWord == 'g' || qty != qty.roundToDouble();
-    final each = Money.cents(m[3]!.replaceAll(_semi, ','));
+    final each = Money.cents(m[3]!.replaceAll(_semi, ',').replaceAll(_spaces, ''));
     return (qty: (qty * 1000).round() / 1000, unit: byWeight ? 'kg' : null, unitPrice: each != null && each > 0 ? each : null);
   }
 
@@ -150,6 +155,9 @@ class ReceiptParser {
       final price = _cents(m[1]!);
       if (price == null || price <= 0) continue;
       // Quantity lines like "2 x 1,29" or "0,750 kg x 199,99": the product name is usually on the line above.
+      // "0,620 kg x 1,85": the number at the end is the price of one kilo, not a line total. It is
+      // a quantity line (used below), not a product called "kg x".
+      if (_unitPriceLine.hasMatch(name)) continue;
       final qtyOnly = _quantityOnly.hasMatch(name);
       if (!qtyOnly && !_twoLetters.hasMatch(name)) continue; // e.g. a date and time "25.11.2026 10:15"
       ({double qty, String? unit, int? unitPrice})? amount;

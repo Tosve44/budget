@@ -8,6 +8,7 @@
 import 'dart:convert';
 
 import 'package:budget/app_model.dart';
+import 'package:budget/core/models.dart';
 import 'package:budget/core/money.dart';
 import 'package:budget/core/prices.dart';
 import 'package:budget/platform/receipt_reader.dart';
@@ -218,6 +219,15 @@ List<String> checkTrends(PriceRun run) {
       if ((p.unit == 'kg') != kg) problems.add('$k on ${p.date}: per kg ${p.unit == 'kg'}, want $kg');
     }
     run.skipped += byDate.length - g.entries.length;
+    for (final d in byDate.keys.where((d) => !g.entries.any((p) => p.date == d))) {
+      final line = run.model.store.data.transactions
+          .where((t) => t.date == d)
+          .expand((t) => t.items ?? const <ReceiptItem>[])
+          .where((it) => _norm(it.name) == k)
+          .firstOrNull;
+      // ignore: avoid_print
+      print('PRICES left out: $k on $d, saved as ${line?.toJson()}, real ${byDate[d]!['qty']} × ${byDate[d]!['unitPrice']}');
+    }
   }
   return problems;
 }
