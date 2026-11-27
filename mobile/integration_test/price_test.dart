@@ -17,6 +17,13 @@ import 'price_photos.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  // The CI scripts wait for this line to know the app started on the simulator (otherwise they
+  // restart it after 6 minutes, before the 26 photos are read).
+  test('device', () {
+    // ignore: avoid_print
+    print('DEVICE ${Platform.operatingSystem} ${Platform.operatingSystemVersion} | price tracking');
+  });
+
   testWidgets(
     'six months of weekly receipt photos: price tracking',
     (tester) => logged('six months of receipts', () async {
