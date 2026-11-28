@@ -1,6 +1,6 @@
 import { Store, LIMITS, categoryIcon, ICON_CHOICES, toCents, monthKey, todayKey, shiftMonth, uid, normalizeItem, pricePerUnit, cleanItem, storeTrend, sameStore } from './store.js';
 import { putPhoto, getPhoto, deletePhoto, compressImage } from './photos.js';
-import { readReceiptText, parseReceipt, findTotal, findStore } from './receipt.js';
+import { readReceiptText, parseReceipt, findTotal, findStore, findDate } from './receipt.js';
 import { startCloud, loadPhoto } from './cloud.js';
 
 const store = new Store();
@@ -559,7 +559,9 @@ function openTxSheet(tx, preset = {}) {
       $('#useTotal', itemsWrap)?.addEventListener('click', () => { $('#amount', root).value = centsToInput(itemsTotal()); });
     };
     paintItems();
-    $('#date', root).addEventListener('change', paintItems);
+    // A date picked by hand wins over the one read from a receipt.
+    let dateTouched = false;
+    $('#date', root).addEventListener('change', () => { dateTouched = true; paintItems(); });
     $('#shop', root).addEventListener('change', paintItems);
 
     const thumb = $('#thumb', root);
@@ -596,6 +598,13 @@ function openTxSheet(tx, preset = {}) {
         const found = parseReceipt(text);
         const shop = findStore(text);
         if (shop && !$('#shop', root).value.trim()) $('#shop', root).value = shop;
+        const day = findDate(text);
+        let dateNote = '';
+        if (day && !dateTouched && day !== $('#date', root).value) {
+          $('#date', root).value = day;
+          const [y, m, d] = day.split('-');
+          dateNote = ` Date from the receipt: ${d}.${m}.${y}.`;
+        }
         if (found.length) {
           items = found;
           // Prefer the printed total (it includes discounts); otherwise add up the items.
@@ -607,10 +616,11 @@ function openTxSheet(tx, preset = {}) {
           status.textContent = printed && printed !== sum
             ? `Found ${found.length} items. They add up to ${money(sum)}, but the receipt total is ${money(printed)}: a price may be misread (or there is a discount). Check the prices, then save.`
             : `Found ${found.length} items. Check names and prices, then save.`;
+          status.textContent += dateNote;
           status.classList.toggle('warn', !!printed && printed !== sum);
           if (!$('#amount', root).value) $('#amount', root).value = centsToInput(total);
         } else {
-          status.textContent = 'Could not find item lines. You can add items by hand.';
+          status.textContent = 'Could not find item lines. You can add items by hand.' + dateNote;
         }
       } catch (err) {
         console.warn(err);

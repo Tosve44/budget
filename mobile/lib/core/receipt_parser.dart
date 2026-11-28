@@ -126,6 +126,48 @@ class ReceiptParser {
     return null;
   }
 
+  static final _dmy = RegExp(r'(?<![\d.,/-])(\d{1,2}) ?[.,/-] ?(\d{1,2}) ?[.,/-] ?(\d{4}|\d{2})(?![\d,]|[.,/-]\d)');
+  static final _ymd = RegExp(r'(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)');
+  static final _time = RegExp(r'(?<!\d)([01]?\d|2[0-3])[:.]([0-5]\d)(?![\d,])');
+  static final _notPurchase = RegExp(r'(rok|uporab|best|exp|valid|velja|vrijedi|važi|garanc)', caseSensitive: false); // best before...
+
+  /// The day of the purchase, as "YYYY-MM-DD"; null if none is printed (or it can't be right).
+  /// Receipts print "21.11.2026 14:05", "21.11.26", "21/11/2026" or "2026-11-21"; the reader may
+  /// see a dot as a comma or add spaces. Only real days from about a year ago up to tomorrow
+  /// count, so a price isn't taken, and lines like "best before" are skipped. The date next to a
+  /// time wins. Same as findDate in the web app's receipt.js.
+  static String? findDate(String text, {DateTime? today}) {
+    final t = today ?? DateTime.now();
+    final latest = DateTime(t.year, t.month, t.day + 1);
+    final earliest = DateTime(t.year - 1, t.month, t.day - 7);
+    String? ok(int y, int m, int d) {
+      final day = DateTime(y, m, d);
+      if (day.year != y || day.month != m || day.day != d) return null; // e.g. 31.02.
+      if (day.isAfter(latest) || day.isBefore(earliest)) return null;
+      return '$y-${m.toString().padLeft(2, '0')}-${d.toString().padLeft(2, '0')}';
+    }
+
+    String? first;
+    for (final line in text.split(RegExp(r'\r?\n'))) {
+      if (_notPurchase.hasMatch(line)) continue;
+      final found = <(String?, RegExpMatch)>[];
+      for (final m in _ymd.allMatches(line)) {
+        found.add((ok(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!)), m));
+      }
+      for (final m in _dmy.allMatches(line)) {
+        final y = m[3]!.length == 2 ? 2000 + int.parse(m[3]!) : int.parse(m[3]!);
+        found.add((ok(y, int.parse(m[2]!), int.parse(m[1]!)), m));
+      }
+      for (final (day, m) in found) {
+        if (day == null) continue;
+        final rest = '${line.substring(0, m.start)} ${line.substring(m.end)}';
+        if (_time.hasMatch(rest)) return day;
+        first ??= day;
+      }
+    }
+    return first;
+  }
+
   /// The receipt's grand total ("SKUPAJ", "ZA PLAČILO", "TOTAL"...), which already includes
   /// discounts. When several lines qualify, the largest amount wins. null if none is printed.
   static int? findTotal(String text) {

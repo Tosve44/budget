@@ -21,6 +21,9 @@ function check(name, ok, detail = '') { ok ? pass++ : fail++; out.push(`${ok ? '
   const ctx = await browser.newContext({ ...devices['iPhone 13'], locale: 'sl-SI', timezoneId: 'Europe/Ljubljana', colorScheme: 'light' });
   const p = await ctx.newPage();
   p.setDefaultTimeout(10000);
+  // The receipts are from 30 May to 21 Nov 2026; the app only takes a receipt date from the last
+  // year, so the test runs on the day after the last shopping trip (plus a week).
+  await p.clock.setFixedTime(new Date('2026-11-28T10:00:00+01:00'));
   const errors = [];
   p.on('pageerror', (e) => errors.push(e.message));
   await p.goto(URL);
@@ -28,13 +31,14 @@ function check(name, ok, detail = '') { ok ? pass++ : fail++; out.push(`${ok ? '
   const read = []; // what the app read from each receipt
   for (const r of expected.receipts) {
     await p.click('#addBtn');
-    await p.fill('#date', r.date);
+    // No date typed in: it comes from the receipt.
     await p.setInputFiles('#photoInput', path.join(__dirname, 'receipts', r.file));
     await p.waitForFunction(() => /Found|Could not/.test(document.querySelector('#ocrStatus')?.textContent || ''), null, { timeout: 180000 });
     const status = await p.textContent('#ocrStatus');
     const items = await p.$$eval('.item-row', (rs) => rs.map((x) => ({ name: x.querySelector('.item-name').value, price: x.querySelector('.item-price').value })));
     const amount = await p.inputValue('#amount');
     const shop = await p.inputValue('#shop');
+    const date = await p.inputValue('#date');
     if (SHOTS && r.week === 25) await p.screenshot({ path: `${SHOTS}/web-receipt-week25.png`, fullPage: true });
     const got = items.map((i) => ({ name: i.name, price: cents(i.price) }));
     const fixes = await correctLikeAPerson(r, got);
@@ -44,10 +48,11 @@ function check(name, ok, detail = '') { ok ? pass++ : fail++; out.push(`${ok ? '
     }
     const realShop = r.store === 'Tus' ? 'Tuš' : r.store;
     if (shop !== realShop) await p.fill('#shop', realShop); // a person would fix a wrong shop too
+    if (date !== r.date) await p.fill('#date', r.date); // and a wrong date
     if (cents(amount) !== r.total) await p.fill('#amount', String(r.total / 100).replace('.', ','));
     await p.click('#saveTx2');
     await p.waitForFunction(() => !document.querySelector('#sheet').open);
-    read.push({ r, status, shop, amount: cents(amount), items: got, fixes });
+    read.push({ r, status, shop, date, amount: cents(amount), items: got, fixes });
     process.stdout.write(`${r.file} ${r.store}: ${items.length}/${r.items.length} items, total ${amount}${fixes.length ? `, fixed by hand: ${fixes.join('; ')}` : ''}\n`);
   }
 
@@ -110,6 +115,18 @@ function check(name, ok, detail = '') { ok ? pass++ : fail++; out.push(`${ok ? '
   const totalsRight = read.filter((x) => x.amount === x.r.total).length;
   check(`receipt total read right on ${totalsRight}/${read.length} receipts (want ≥ 90%)`, totalsRight / read.length >= 0.9);
   check(`receipt reader got ${right}/${lines} lines exactly right (${pctRead}%, want ≥ 90%)`, pctRead >= 90);
+  // A date picked by hand wins over the one on the receipt.
+  {
+    await p.click('#addBtn');
+    await p.fill('#date', '2026-11-25');
+    await p.setInputFiles('#photoInput', path.join(__dirname, 'receipts', expected.receipts[25].file));
+    await p.waitForFunction(() => /Found|Could not/.test(document.querySelector('#ocrStatus')?.textContent || ''), null, { timeout: 180000 });
+    check('a date picked by hand is kept when a receipt is read', (await p.inputValue('#date')) === '2026-11-25' && !/Date from the receipt/.test(await p.textContent('#ocrStatus')),
+      `${await p.inputValue('#date')} / ${await p.textContent('#ocrStatus')}`);
+    await p.click('[data-close]');
+    await p.waitForFunction(() => !document.querySelector('#sheet').open);
+  }
+
   const misread = read.filter((x) => x.fixes.some((f) => / → /.test(f) && !/^"[^"]*" ([\d.]+) → "[^"]*" \1$/.test(f)));
   const warned = misread.filter((x) => /add up/.test(x.status));
   out.push(`    ${misread.length} receipts had a misread price; the "doesn't add up" warning showed on ${warned.length}`);
@@ -119,6 +136,11 @@ function check(name, ok, detail = '') { ok ? pass++ : fail++; out.push(`${ok ? '
   const shopsRight = read.filter((x) => x.shop === shopName(x.r.store)).length;
   check(`shop read from the receipt: ${shopsRight}/${read.length}`, shopsRight === read.length,
     read.filter((x) => x.shop !== shopName(x.r.store)).map((x) => `${x.r.file}: "${x.shop}" not ${shopName(x.r.store)}`).join('; '));
+
+  const datesRight = read.filter((x) => x.date === x.r.date).length;
+  check(`date read from the receipt: ${datesRight}/${read.length}`, datesRight >= read.length - 1,
+    read.filter((x) => x.date !== x.r.date).map((x) => `${x.r.file}: ${x.date} not ${x.r.date}`).join('; '));
+  check('the status says the date came from the receipt', read.filter((x) => x.date === x.r.date).every((x) => /Date from the receipt/.test(x.status)));
 
   // 2. Every price in the history must be the real price of one piece / one kilo that day, at
   // that shop. A line whose quantity doesn't add up is left out (counted) rather than shown wrong.

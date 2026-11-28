@@ -63,6 +63,9 @@ void main() {
       // ignore: avoid_print
       print('PRICES shop read from the receipt on ${run.shopsRight}/${priceReceipts.length}');
       expect(run.shopsRight / priceReceipts.length, greaterThanOrEqualTo(0.85), reason: 'the phone read too few shop names');
+      // ignore: avoid_print
+      print('PRICES date read from the receipt on ${run.datesRight}/${priceReceipts.length}');
+      expect(run.datesRight / priceReceipts.length, greaterThanOrEqualTo(0.85), reason: 'the phone read too few dates');
       // (A receipt whose total is misread the same way as an item can't be caught.)
       expect(run.warned, greaterThanOrEqualTo((run.misread * 0.7).floor()), reason: 'misread prices should show the warning');
       await checkPricesScreen(tester, run.model);

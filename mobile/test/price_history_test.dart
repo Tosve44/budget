@@ -60,6 +60,7 @@ void main() {
     expect(groups['alpsko mleko 3 5% 1l']!.changeSinceFirst, 0);
     // Every shop read from its receipt; the % on Prices is between purchases at the same shop.
     expect(run.shopsRight, priceReceipts.length);
+    expect(run.datesRight, priceReceipts.length, reason: 'the date is read from every receipt');
     expect(PriceHistory.stores(groups.values), ['Hofer', 'Lidl', 'Mercator', 'Spar', 'Tuš']);
     expect((groups['banane']!.trend().store, groups['banane']!.trend().change), ('Mercator', -13.4));
     expect((groups['paradiznik']!.trend().store, groups['paradiznik']!.trend().change), ('Spar', 43.4));

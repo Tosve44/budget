@@ -37,19 +37,28 @@ String _input(int cents) => Money.inputText(cents, emptyForZero: false);
 class PriceRun {
   final AppModel model;
   final List<String> log = [];
-  int lines = 0, readRight = 0, totalsRight = 0, misread = 0, warned = 0, skipped = 0, shopsRight = 0;
+  int lines = 0, readRight = 0, totalsRight = 0, misread = 0, warned = 0, skipped = 0, shopsRight = 0, datesRight = 0;
   PriceRun(this.model);
 }
 
 /// Scans all receipts through the add-entry screen, fixes what was misread, saves each one.
 Future<PriceRun> scanSixMonths(WidgetTester tester, QueueReader reader, {Future<void> Function(String name)? shot}) async {
-  final model = await pumpApp(tester, reader: reader);
+  // The receipts are from 30 May to 21 Nov 2026, and the app only takes a receipt's date from the
+  // last year: the run is on the day after the last shopping trip (plus a week).
+  final model = await pumpApp(tester, reader: reader, now: () => DateTime(2026, 11, 28, 10));
   final run = PriceRun(model);
   for (final r in priceReceipts) {
     await tapKey(tester, 'addEntry');
-    await setDate(tester, r['date'] as String);
+    // No date picked: it comes from the receipt.
     await scanReceipt(tester, find.byKey(const Key('readNote')));
     final note = tester.widget<Text>(find.descendant(of: find.byKey(const Key('readNote')), matching: find.byType(Text)).first).data ?? '';
+    final d = r['date'] as String;
+    final dateRead = note.contains('Date from the receipt: ${d.substring(8)}.${d.substring(5, 7)}.${d.substring(0, 4)}.');
+    if (dateRead) {
+      run.datesRight++;
+    } else {
+      await setDate(tester, d); // a person fixes a wrong date
+    }
     final want = (r['items'] as List).cast<Map<String, dynamic>>();
     final got = <(String, int?)>[];
     // The screen builds only what is on it, so each line is scrolled to first.
@@ -85,6 +94,7 @@ Future<PriceRun> scanSixMonths(WidgetTester tester, QueueReader reader, {Future<
     run.log.add(
       '${r['file']} ${r['store']}: ${got.length}/${want.length} lines read, total ${amount == r['total'] ? 'ok' : 'read as $amount'}'
       '${readShop == shop ? '' : ', shop read as "$readShop"'}'
+      '${dateRead ? '' : ', date not read'}'
       '${fixes.isEmpty ? '' : ', fixed by hand: ${fixes.join('; ')}'}',
     );
     await tapKey(tester, 'saveEntry');

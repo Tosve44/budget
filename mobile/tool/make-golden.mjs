@@ -231,4 +231,32 @@ writeFileSync(`${out}/stores.json`, JSON.stringify({
   })),
   previous: wprev,
 }));
+// Dates: the day of the purchase, read from the receipt, for a given "today".
+seed = 20261128;
+const p2 = (n) => String(n).padStart(2, '0');
+const dateTexts = [];
+for (let i = 0; i < 1500; i++) {
+  const today = new Date(Date.UTC(int(2025, 2028), int(0, 11), int(1, 28)));
+  const todayKey = today.toISOString().slice(0, 10);
+  const lines = Array.from({ length: int(0, 8) }, () => pick([pick(names) + ' ' + price(), pick(skipLines), `${int(1, 9)} x ${price()} ${price()}`,
+    `Račun št.: ${p2(int(1, 99))}-${int(1000, 9999)}-${p2(int(10, 99))}`, `Rok uporabe ${p2(int(1, 31))}.${p2(int(1, 12))}.${int(2026, 2029)}`,
+    `1.234,56`, `12.345,67 EUR`, `Tel. 01 234 56 78`, `ZOI: ${int(100000, 999999)}`, `${p2(int(0, 23))}:${p2(int(0, 59))}`]));
+  for (let k = 0; k < int(0, 2); k++) {
+    const d = new Date(today.getTime() + int(-500, 5) * 86400000);
+    let [y, m, dd] = [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()];
+    if (rnd() < 0.08) dd = pick([30, 31, 32, 0]); // not a real day (sometimes)
+    if (rnd() < 0.04) m = pick([13, 0]);
+    const sep = pick(['.', '.', '.', '/', '-', ',', ' . ', '. ']);
+    const date = pick([
+      `${p2(dd)}${sep}${p2(m)}${sep}${y}`, `${dd}${sep}${m}${sep}${y}`, `${p2(dd)}${sep}${p2(m)}${sep}${String(y).slice(2)}`,
+      `${y}-${p2(m)}-${p2(dd)}`,
+    ]);
+    const time = pick(['', ` ${p2(int(0, 23))}:${p2(int(0, 59))}`, ` ob ${int(0, 23)}.${p2(int(0, 59))}`, `  ${p2(int(0, 23))}:${p2(int(0, 59))}:${p2(int(0, 59))}`]);
+    const line = pick([`${date}${time}`, `Datum: ${date}${time}`, `${time.trim()} ${date}`, `Blagajna 3 ${date}${time}`]);
+    lines.splice(int(0, lines.length), 0, line);
+  }
+  const text = lines.join(pick(['\n', '\r\n']));
+  dateTexts.push({ text, today: todayKey, date: receipt.findDate(text, todayKey) });
+}
+writeFileSync(`${out}/dates.json`, JSON.stringify({ texts: dateTexts }));
 console.log(`Wrote golden files to ${out}: ${receipts.length} receipts, ${money.length} money inputs, ${normalized.length} names, ${s.data.transactions.length} entries.`);

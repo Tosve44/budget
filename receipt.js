@@ -259,6 +259,43 @@ export function findStore(text) {
   return null;
 }
 
+// The day of the purchase, as "YYYY-MM-DD"; null if none is printed (or it can't be right).
+// Receipts print "21.11.2026 14:05", "21.11.26", "21/11/2026" or "2026-11-21"; the reader may
+// see a dot as a comma or add spaces. Only real days from about a year ago up to tomorrow count,
+// so a price isn't taken, and lines like "best before" are skipped. The date next to a time wins.
+const DMY = /(?<![\d.,/-])(\d{1,2}) ?[.,/-] ?(\d{1,2}) ?[.,/-] ?(\d{4}|\d{2})(?![\d,]|[.,/-]\d)/g;
+const YMD = /(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)/g;
+const TIME = /(?<!\d)([01]?\d|2[0-3])[:.]([0-5]\d)(?![\d,])/;
+const NOT_PURCHASE = /(rok|uporab|best|exp|valid|velja|vrijedi|važi|garanc)/i; // best before, valid until...
+export function findDate(text, today = new Date()) {
+  const t = typeof today === 'string' ? new Date(`${today}T12:00:00`) : today;
+  const latest = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1);
+  const earliest = new Date(t.getFullYear() - 1, t.getMonth(), t.getDate() - 7);
+  const ok = (y, m, d) => {
+    const day = new Date(y, m - 1, d);
+    if (day.getFullYear() !== y || day.getMonth() !== m - 1 || day.getDate() !== d) return null; // e.g. 31.02.
+    if (day > latest || day < earliest) return null;
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  };
+  let first = null;
+  for (const line of String(text).split(/\r?\n/)) {
+    if (NOT_PURCHASE.test(line)) continue;
+    const found = [];
+    for (const m of line.matchAll(YMD)) found.push([ok(+m[1], +m[2], +m[3]), m]);
+    for (const m of line.matchAll(DMY)) {
+      const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+      found.push([ok(y, +m[2], +m[1]), m]);
+    }
+    for (const [day, m] of found) {
+      if (!day) continue;
+      const rest = line.slice(0, m.index) + ' ' + line.slice(m.index + m[0].length);
+      if (TIME.test(rest)) return day;
+      first = first || day;
+    }
+  }
+  return first;
+}
+
 // The receipt's grand total ("SKUPAJ", "ZA PLAČILO", "TOTAL"...), which already includes discounts.
 const TOTAL_WORDS = /\b(skupaj|za pla[čc]ilo|total|ukupno|za uplatu|summe)\b/i;
 export function findTotal(text) {

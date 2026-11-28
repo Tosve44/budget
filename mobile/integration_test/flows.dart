@@ -18,8 +18,9 @@ Future<AppModel> pumpApp(
   Plan plan = Plan.full,
   FakePurchases? purchases,
   ReceiptReader? reader,
+  DateTime Function()? now,
 }) async {
-  final model = AppModel.forTests(demo: demo, asMilica: asMilica, plan: plan, purchases: purchases, reader: reader);
+  final model = AppModel.forTests(demo: demo, asMilica: asMilica, plan: plan, purchases: purchases, reader: reader, now: now);
   await tester.pumpWidget(BudgetApp(model: model));
   await tester.pumpAndSettle();
   return model;

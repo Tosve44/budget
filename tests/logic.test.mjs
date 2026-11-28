@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store, toCents, shiftMonth, normalizeItem, createInitialData, pricePerUnit, cleanItem, storeTrend } from '../store.js';
 import { rowToTx } from '../sync.js';
-import { parseReceipt, findStore } from '../receipt.js';
+import { parseReceipt, findStore, findDate } from '../receipt.js';
 
 class MemStorage { constructor() { this.m = {}; } getItem(k) { return this.m[k] ?? null; } setItem(k, v) { this.m[k] = String(v); } }
 
@@ -381,4 +381,25 @@ test('a weight line whose price of one kilo is at the end is a quantity, not a p
   assert.deepEqual(parseReceipt('PIŠČANČJE PRSI 12,24\n1,182 kg x 10,36\nKRUH 1,79'), [
     { name: 'PIŠČANČJE PRSI', price: 1224, qty: 1.182, unit: 'kg', unitPrice: 1036 }, { name: 'KRUH', price: 179 }]);
   assert.deepEqual(parseReceipt('2 kom x 0,59\nJOGURT 1,18'), [{ name: 'JOGURT', price: 118, qty: 2, unitPrice: 59 }]);
+});
+
+// ---- the day on the receipt ----
+test('the day of the purchase is read from the receipt', () => {
+  const T = '2026-11-28';
+  assert.equal(findDate('MERCATOR d.d.\nRačun št.: 01-1234-56\n30.05.2026 14:05\nMLEKO 1,19', T), '2026-05-30');
+  assert.equal(findDate('21.11.26 9:15', T), '2026-11-21');
+  assert.equal(findDate('Datum: 2026-11-21', T), '2026-11-21');
+  assert.equal(findDate('21 . 11 . 2026 10:02', T), '2026-11-21'); // spaces the reader adds
+  assert.equal(findDate('21,11,2026 10:02', T), '2026-11-21'); // a dot read as a comma
+  assert.equal(findDate('5/6/2026', T), '2026-06-05');
+  // The date next to a time is the purchase; a best-before date is never it.
+  assert.equal(findDate('Garancija do 30.12.2026\n20.11.2026\n21.11.2026 12:00', T), '2026-11-21');
+  assert.equal(findDate('Rok uporabe 22.11.2026', T), null);
+  // Prices, quantities and impossible or far-off days are not dates.
+  assert.equal(findDate('Mleko 1,15 2,30\n2 x 1,29 2,58\n1.234,56', T), null);
+  assert.equal(findDate('31.02.2026 10:00', T), null);
+  assert.equal(findDate('01.01.2020 10:00', T), null, 'too long ago');
+  assert.equal(findDate('30.11.2026 10:00', T), null, 'in two days');
+  assert.equal(findDate('29.11.2026', T), '2026-11-29', 'tomorrow is fine (time zones)');
+  assert.equal(findDate('MLEKO 1,19'), null);
 });

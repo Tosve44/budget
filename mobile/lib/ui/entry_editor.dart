@@ -95,7 +95,12 @@ class _EntryEditorState extends State<EntryEditor> {
       firstDate: DateTime(2000),
       lastDate: DateTime(now.year + 5, 12, 31),
     );
-    if (d != null) setState(() => draft.date = DateKey.day(d));
+    if (d != null) {
+      setState(() {
+        draft.date = DateKey.day(d);
+        draft.dateTouched = true;
+      });
+    }
   }
 
   Future<void> addPhoto({required bool camera}) async {
@@ -114,7 +119,7 @@ class _EntryEditorState extends State<EntryEditor> {
       final text = await model.reader.read(model.photos.file(id)!.path);
       if (!mounted) return;
       _readLines();
-      final n = draft.applyReceiptText(text);
+      final n = draft.applyReceiptText(text, today: model.now());
       amount.text = draft.amountText;
       shop.text = draft.store;
       _syncLineFields();
@@ -128,6 +133,8 @@ class _EntryEditorState extends State<EntryEditor> {
           : mm != null
           ? '⚠️ Found $n item${n == 1 ? '' : 's'}. They add up to ${model.money(mm.$1)}, but the receipt total is ${model.money(mm.$2)}: a price may be misread (or there is a discount). Check the prices.'
           : 'Found $n item${n == 1 ? '' : 's'}. Check them; tap to fix a name or price.';
+      final day = draft.dateFromReceipt;
+      if (day != null) readNote = '$readNote Date from the receipt: ${day.substring(8)}.${day.substring(5, 7)}.${day.substring(0, 4)}.';
     } catch (e) {
       readNote = 'Could not read the text. You can still type the items, and the photo is kept.';
     }

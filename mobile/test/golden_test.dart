@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:budget/core/models.dart';
 import 'package:budget/core/money.dart';
 import 'package:budget/core/prices.dart';
+import 'package:budget/core/entry_draft.dart';
 import 'package:budget/core/receipt_parser.dart';
 import 'package:budget/core/store.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -119,6 +120,34 @@ void main() {
       expect(got?.price, r?['price']);
       expect(got?.unit, r?['unit']);
     }
+  });
+
+  test('the date on a receipt matches the web app', () {
+    final texts = ((json('dates') as Map)['texts'] as List).cast<Map>();
+    expect(texts.length, greaterThan(1000));
+    expect(texts.where((t) => t['date'] == null).length, greaterThan(200));
+    expect(texts.where((t) => t['date'] != null).length, greaterThan(500));
+    final bad = <String>[];
+    for (final t in texts) {
+      final got = ReceiptParser.findDate(t['text'] as String, today: DateTime.parse(t['today'] as String));
+      if (got != t['date']) bad.add('${t['text']}\ntoday ${t['today']} web: ${t['date']} app: $got');
+    }
+    expect(bad.length, 0, reason: bad.take(5).join('\n-----\n'));
+  });
+
+  test('a receipt sets the date, unless it was picked by hand', () {
+    const text = 'MERCATOR d.d.\n21.11.2026 14:05\nMLEKO 1,19\nSKUPAJ EUR 1,19';
+    final today = DateTime(2026, 11, 28);
+    final d = EntryDraft(spaceId: 's', date: '2026-11-28');
+    d.applyReceiptText(text, today: today);
+    expect((d.date, d.dateFromReceipt), ('2026-11-21', '2026-11-21'));
+    final same = EntryDraft(spaceId: 's', date: '2026-11-21')..applyReceiptText(text, today: today);
+    expect((same.date, same.dateFromReceipt), ('2026-11-21', null), reason: 'nothing to say when it is the same day');
+    final byHand = EntryDraft(spaceId: 's', date: '2026-11-20')..dateTouched = true;
+    byHand.applyReceiptText(text, today: today);
+    expect((byHand.date, byHand.dateFromReceipt), ('2026-11-20', null));
+    final old = EntryDraft(spaceId: 's', date: '2026-11-28')..applyReceiptText(text, today: DateTime(2028, 1, 10));
+    expect(old.date, '2026-11-28', reason: 'a date more than a year back is not taken');
   });
 
   test('the shop on a receipt, and prices at the same shop, match the web app', () {

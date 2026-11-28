@@ -158,12 +158,22 @@ class EntryDraft {
   /// Fills in the receipt lines from the text read off a photo, and the amount from the printed
   /// total (SKUPAJ / ZA PLAČILO), or the sum of the lines when no total was found.
   /// Returns how many lines were found.
-  int applyReceiptText(String text) {
+  /// Set when the date was picked by hand; then a receipt does not change it.
+  bool dateTouched = false;
+
+  /// After reading a receipt: the day it was printed on, when that changed the date.
+  String? dateFromReceipt;
+
+  int applyReceiptText(String text, {DateTime? today}) {
     final found = ReceiptParser.parse(text);
     if (found.isNotEmpty) lines = found.map(DraftLine.of).toList();
     final total = ReceiptParser.findTotal(text);
     final shop = ReceiptParser.findStore(text);
     if (shop != null && store.trim().isEmpty) store = shop;
+    // A date picked by hand wins over the one on the receipt.
+    final day = ReceiptParser.findDate(text, today: today);
+    dateFromReceipt = day != null && !dateTouched && day != date ? day : null;
+    if (dateFromReceipt != null) date = dateFromReceipt!;
     final sum = found.fold(0, (s, it) => s + it.price);
     // A misread digit (5 as 9, 1 as 7) would show up later as a fake price jump.
     mismatch = total != null && found.isNotEmpty && total != sum ? (sum, total) : null;

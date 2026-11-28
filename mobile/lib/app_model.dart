@@ -298,6 +298,7 @@ class AppModel extends ChangeNotifier {
     Plan plan = Plan.full,
     ReceiptReader? reader,
     FakePurchases? purchases,
+    DateTime Function()? now,
   }) {
     final store = BudgetStore(storage: MemoryStorage());
     if (asMilica) store.setCurrentUser('u_milica');
@@ -310,6 +311,7 @@ class AppModel extends ChangeNotifier {
       picker: const SamplePhotoPicker(),
       purchases: purchases ?? FakePurchases(),
       everyoneHasPremium: plan == Plan.full,
+      now: now,
     );
   }
 }
