@@ -120,13 +120,22 @@ class CloudRows {
     'note': Limits.clip(t.note, Limits.note),
     'items': (t.items ?? [])
         .take(Limits.items)
-        .map((i) => {'name': Limits.clip(i.name, Limits.itemName), 'price': Limits.clamp(i.price)})
+        .map(
+          (i) => {
+            'name': Limits.clip(i.name, Limits.itemName),
+            'price': Limits.clamp(i.price),
+            if (i.qty != null) 'qty': i.qty,
+            if (i.unit != null) 'unit': i.unit,
+            if (i.unitPrice != null) 'unitPrice': i.unitPrice,
+          },
+        )
         .toList(),
     'receipt_path': receiptPath,
     'created_by': t.createdBy,
     'created_at': t.createdAt,
     'updated_at': t.updatedAt,
     'deleted': deleted,
+    'store': Limits.clip(t.store.trim(), Limits.store),
   };
 
   static Transaction? transaction(Row r) {
@@ -134,7 +143,17 @@ class CloudRows {
     if (id is! String || sp is! String || cat is! String || kind == null || date is! String) return null;
     final items = <ReceiptItem>[];
     for (final i in (r['items'] is List ? r['items'] as List : const [])) {
-      if (i is Map && i['name'] is String) items.add(ReceiptItem(name: i['name'] as String, price: asInt(i['price'])));
+      if (i is Map && i['name'] is String) {
+        items.add(
+          ReceiptItem(
+            name: i['name'] as String,
+            price: asInt(i['price']),
+            qty: i['qty'] is num ? i['qty'] as num : null,
+            unit: i['unit'] is String ? i['unit'] as String : null,
+            unitPrice: i['unitPrice'] is num ? (i['unitPrice'] as num).toInt() : null,
+          ),
+        );
+      }
     }
     final path = r['receipt_path'];
     return Transaction(
@@ -150,6 +169,7 @@ class CloudRows {
       updatedAt: Timestamps.iso(r['updated_at']),
       receiptId: path is String ? 'cloud:$path' : null,
       items: items.isEmpty ? null : items,
+      store: r['store'] is String ? r['store'] as String : '',
     );
   }
 }
@@ -734,17 +754,25 @@ class SyncEngine {
   /// before category icons). Icons then stay on this phone until the column is added.
   bool noIconColumn = false;
 
+  /// The same for the `store` column of entries (set up before shop names on receipts).
+  bool noStoreColumn = false;
+
   Future<List<String>> _upsert(SyncTable table, List<Row> rows) async {
-    if (table != SyncTable.categories) return client.upsert(table.name, rows);
-    List<Row> withoutIcon() => [for (final r in rows) Map.of(r)..remove('icon')];
-    if (noIconColumn) return client.upsert(table.name, withoutIcon());
+    final column = table == SyncTable.categories ? 'icon' : 'store';
+    bool missing() => table == SyncTable.categories ? noIconColumn : noStoreColumn;
+    List<Row> without() => [for (final r in rows) Map.of(r)..remove(column)];
+    if (missing()) return client.upsert(table.name, without());
     try {
       return await client.upsert(table.name, rows);
     } on SupabaseError catch (e) {
       final missingColumn = e.code == 'PGRST204' || e.code == '42703';
-      if (!missingColumn || !e.message.contains('icon')) rethrow;
-      noIconColumn = true;
-      return client.upsert(table.name, withoutIcon());
+      if (!missingColumn || !RegExp('\\b$column\\b').hasMatch(e.message)) rethrow;
+      if (table == SyncTable.categories) {
+        noIconColumn = true;
+      } else {
+        noStoreColumn = true;
+      }
+      return client.upsert(table.name, without());
     }
   }
 
@@ -823,6 +851,8 @@ class SyncEngine {
         if (next == null) continue;
         if (i != null) {
           final local = d.transactions[i];
+          // A cloud database from before shop names has no store column: keep this phone's.
+          if (!r.containsKey('store')) next.store = local.store;
           final lr = local.receiptId;
           // Keep using the photo already on this phone.
           if (lr != null && (next.receiptId == null || meta.uploaded[lr] == r['receipt_path'])) next.receiptId = lr;

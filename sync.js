@@ -3,7 +3,7 @@
 // changes and downloads the partner's changes whenever there is a connection.
 // The cloud tables are described in supabase/migrations/*.sql and SYNC.md.
 
-import { uid, createInitialData } from './store.js';
+import { uid, createInitialData, cleanItem } from './store.js';
 
 const META_KEY = 'budget.sync.v1';
 const PAGE = 1000;           // Supabase returns at most 1000 rows per request
@@ -32,6 +32,7 @@ export function txToRow(t, receiptPath) {
     id: t.id, space_id: t.spaceId, category_id: t.categoryId, kind: t.kind, amount: t.amount,
     date: t.date, note: t.note || '', items: t.items || [], receipt_path: receiptPath ?? null,
     created_by: t.createdBy, created_at: t.createdAt, updated_at: t.updatedAt, deleted: !!t.deleted,
+    store: t.store || '',
   };
 }
 export function rowToTx(r) {
@@ -40,8 +41,11 @@ export function rowToTx(r) {
     date: String(r.date).slice(0, 10), note: r.note || '', createdBy: r.created_by,
     createdAt: iso(r.created_at), updatedAt: iso(r.updated_at),
   };
-  if (Array.isArray(r.items) && r.items.length) t.items = r.items.map((i) => ({ name: i.name, price: Number(i.price) }));
+  if (Array.isArray(r.items) && r.items.length) t.items = r.items.map((i) => cleanItem({ name: i.name, price: Number(i.price), qty: i.qty, unit: i.unit, unitPrice: i.unitPrice }));
   if (r.receipt_path) t.receiptId = `cloud:${r.receipt_path}`;
+  // (No store column in the cloud yet: leave the phone's own shop name alone.)
+  if ('store' in r && r.store) t.store = String(r.store);
+  else if ('store' in r) t.store = '';
   return t;
 }
 // Postgres sends times like 2026-11-25T11:30:00.123456+00:00. Some Safari versions cannot read
@@ -323,10 +327,11 @@ export class Sync {
       for (let i = 0; i < rows.length; i += 200) {
         const chunk = rows.slice(i, i + 200);
         let { data, error } = await this.client.from(table).upsert(chunk, { onConflict: 'id' }).select('id');
-        if (error && table === 'categories' && /icon/.test(error.message || '') && /column|schema/i.test(error.message || '')) {
-          // The cloud database doesn't have the icon column yet (its update has not been run):
-          // upload without icons, so syncing keeps working. Icons stay on this phone.
-          ({ data, error } = await this.client.from(table).upsert(chunk.map(({ icon, ...r }) => r), { onConflict: 'id' }).select('id'));
+        const newColumn = table === 'categories' ? 'icon' : 'store';
+        if (error && new RegExp(`\\b${newColumn}\\b`).test(error.message || '') && /column|schema/i.test(error.message || '')) {
+          // The cloud database doesn't have the icon / store column yet (its update has not been
+          // run): upload without it, so syncing keeps working. Icons / shop names stay on this phone.
+          ({ data, error } = await this.client.from(table).upsert(chunk.map(({ [newColumn]: _, ...r }) => r), { onConflict: 'id' }).select('id'));
         }
         if (error) throw friendly(error);
         // The server ignores an edit that is older than its own copy (the partner changed it

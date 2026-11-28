@@ -1,6 +1,6 @@
-import { Store, LIMITS, categoryIcon, ICON_CHOICES, toCents, monthKey, todayKey, shiftMonth, uid, normalizeItem } from './store.js';
+import { Store, LIMITS, categoryIcon, ICON_CHOICES, toCents, monthKey, todayKey, shiftMonth, uid, normalizeItem, pricePerUnit, cleanItem, storeTrend, sameStore } from './store.js';
 import { putPhoto, getPhoto, deletePhoto, compressImage } from './photos.js';
-import { readReceiptText, parseReceipt, findTotal } from './receipt.js';
+import { readReceiptText, parseReceipt, findTotal, findStore, findDate } from './receipt.js';
 import { startCloud, loadPhoto } from './cloud.js';
 
 const store = new Store();
@@ -139,7 +139,7 @@ function renderSpace(space) {
   const showWho = space.type === 'house';
   const txRows = txs.map((t) => {
     const c = store.category(t.categoryId);
-    const meta = [dayLabel(t.date), t.items?.length ? `🧾 ${t.items.length} items` : (t.receiptId ? '🧾' : null), t.note, showWho ? store.user(t.createdBy)?.name : null].filter(Boolean).map(esc).join(' · ');
+    const meta = [dayLabel(t.date), t.store, t.items?.length ? `🧾 ${t.items.length} items` : (t.receiptId ? '🧾' : null), t.note, showWho ? store.user(t.createdBy)?.name : null].filter(Boolean).map(esc).join(' · ');
     return `<li class="tx"><button data-tx="${esc(t.id)}">
       <div class="tx-main"><div class="tx-cat">${c ? ico(c) : ''}${esc(c ? c.name : 'Deleted category')}</div><div class="tx-meta">${meta}</div></div>
       <div class="tx-amt ${t.kind === 'income' ? 'income' : ''}">${t.kind === 'income' ? '+' : '−'}${money(t.amount)}</div>
@@ -353,12 +353,56 @@ function renderSettings() {
 
 // ---------- sheets ----------
 function openSheet(html, bind) {
-  sheet.innerHTML = `<div class="sheet-inner">${html}</div>`;
+  sheet.style.transform = ''; sheet.style.transition = '';
+  sheet.innerHTML = `<div class="grabber" aria-hidden="true"></div><div class="sheet-inner">${html}</div>`;
   bind(sheet);
   sheet.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => sheet.close()));
   if (!sheet.open) sheet.showModal();
 }
 sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.close(); });
+
+// Swipe down to close, like other iPhone sheets. The drag starts only when the sheet is
+// scrolled to the top and the finger moves mostly downward, so scrolling the sheet and
+// swiping the category chips sideways still work. A short drag springs back.
+(() => {
+  let startX = 0, startY = null, dy = 0, dragging = false, recent = [];
+  sheet.addEventListener('touchstart', (e) => {
+    startY = (e.touches.length === 1 && sheet.scrollTop <= 0) ? e.touches[0].clientY : null;
+    if (startY === null) return;
+    startX = e.touches[0].clientX; dy = 0; dragging = false; recent = [[Date.now(), 0]];
+  }, { passive: true });
+  sheet.addEventListener('touchmove', (e) => {
+    if (startY === null) return;
+    const t = e.touches[0];
+    dy = t.clientY - startY;
+    recent.push([Date.now(), dy]); while (recent.length > 2 && Date.now() - recent[0][0] > 120) recent.shift();
+    if (!dragging) {
+      const dx = Math.abs(t.clientX - startX);
+      if (dy < -4 || dx > 10 && dx > dy) { startY = null; return; }
+      if (dy > 10 && dy > dx) { dragging = true; sheet.style.transition = 'none'; }
+    }
+    if (dragging) { e.preventDefault(); sheet.style.transform = `translateY(${Math.max(0, dy)}px)`; }
+  }, { passive: false });
+  const end = () => {
+    if (startY === null) return;
+    startY = null;
+    if (!dragging) return;
+    dragging = false;
+    // Speed over the last moment of the swipe, in pixels per millisecond.
+    const [ft, fy] = recent[0];
+    const fast = dy > 40 && (dy - fy) / Math.max(1, Date.now() - ft) > 0.5;
+    sheet.style.transition = 'transform .2s ease';
+    if (dy > Math.min(120, sheet.offsetHeight * 0.25) || fast) {
+      sheet.style.transform = `translateY(${sheet.offsetHeight}px)`;
+      setTimeout(() => sheet.close(), 200);
+    } else {
+      sheet.style.transform = '';
+    }
+  };
+  sheet.addEventListener('touchend', end);
+  sheet.addEventListener('touchcancel', end);
+  sheet.addEventListener('close', () => { sheet.style.transform = ''; sheet.style.transition = ''; });
+})();
 
 function openTxSheet(tx, preset = {}) {
   const space = tx ? store.space(tx.spaceId) : currentSpace();
@@ -380,11 +424,13 @@ function openTxSheet(tx, preset = {}) {
     <div class="seg"><button type="button" data-kind="expense">Expense</button><button type="button" data-kind="income">Income</button></div>
     <input class="amount-input" id="amount" aria-label="Amount" inputmode="decimal" placeholder="0" autocomplete="off" value="${tx ? centsToInput(tx.amount) : ''}">
     <div class="chips" id="chips"></div>
+    <div id="newCatBox" class="new-cat" hidden></div>
     <div class="row2">
       <label class="field"><span>Date</span><input type="date" id="date" value="${defaultDate}"></label>
       <label class="field"><span>Note</span><input id="note" maxlength="${LIMITS.note}" placeholder="Optional" value="${tx ? esc(tx.note) : ''}"></label>
     </div>
     <div id="receiptBox" class="receipt-box">
+      <label class="field shop-field"><span>Shop</span><input id="shop" list="shopNames" maxlength="${LIMITS.store}" placeholder="Read from the receipt, or type it" value="${tx ? esc(tx.store || '') : ''}" autocomplete="off"></label>
       <div class="receipt-top">
         <label class="secondary receipt-btn">📷 <span id="photoLabel">Add receipt photo</span><input type="file" id="photoInput" accept="image/*" hidden></label>
         <img id="thumb" class="thumb" alt="Receipt" hidden>
@@ -392,6 +438,7 @@ function openTxSheet(tx, preset = {}) {
       <p class="note" id="ocrStatus" hidden></p>
       <div id="itemsWrap"></div>
     </div>
+    <datalist id="shopNames">${[...new Set(['Mercator', 'Spar', 'Lidl', 'Hofer', 'Tuš', 'Eurospin', 'Jager', ...store.data.transactions.map((t) => t.store).filter(Boolean)])].map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
     <datalist id="itemNames">${[...store.itemHistory().values()].map((g) => `<option value="${esc(g.name)}">`).join('')}</datalist>
     <button class="primary" id="saveTx2">Save</button>
     ${tx ? '<button class="secondary danger" id="delTx">Delete entry</button>' : ''}
@@ -399,12 +446,62 @@ function openTxSheet(tx, preset = {}) {
     const chips = $('#chips', root);
     const paint = () => {
       root.querySelectorAll('[data-kind]').forEach((b) => b.classList.toggle('on', b.dataset.kind === kind));
-      chips.innerHTML = chipsHtml() || '<p class="empty-note">No categories. Add one in Settings.</p>';
+      chips.innerHTML = `${chipsHtml()}<button type="button" class="chip chip-new" id="newCatChip">+ New category</button>`;
       chips.querySelectorAll('[data-chip]').forEach((b) => b.addEventListener('click', () => { categoryId = b.dataset.chip; paint(); }));
+      $('#newCatChip', chips).addEventListener('click', openNewCat);
       $('#receiptBox', root).hidden = kind !== 'expense';
     };
+    // A new category made right here, without leaving the entry (what was typed stays). It is
+    // picked for this entry straight away.
+    const newCatBox = $('#newCatBox', root);
+    const closeNewCat = () => { newCatBox.hidden = true; newCatBox.innerHTML = ''; };
+    function openNewCat() {
+      let icon = '';
+      newCatBox.innerHTML = `
+        <label class="field"><span>New ${kind === 'income' ? 'income' : 'expense'} category</span>
+          <input id="newCatName" maxlength="${LIMITS.categoryName}" placeholder="e.g. Pets" autocomplete="off"></label>
+        <div class="field"><span id="newIconLabel">Icon</span>
+          <div class="icon-grid" role="radiogroup" aria-labelledby="newIconLabel">
+            <button type="button" role="radio" class="icon-auto" data-newicon="" aria-label="Automatic icon for the name"><span id="newAutoIcon"></span><small>Auto</small></button>
+            ${ICON_CHOICES.map((e) => `<button type="button" role="radio" data-newicon="${e}" aria-label="${e}">${e}</button>`).join('')}
+          </div>
+        </div>
+        <div class="new-cat-actions">
+          <button type="button" class="secondary" id="newCatCancel">Cancel</button>
+          <button type="button" class="primary" id="newCatAdd">Add category</button>
+        </div>`;
+      newCatBox.hidden = false;
+      const name = $('#newCatName', newCatBox);
+      const paintIcons = () => {
+        $('#newAutoIcon', newCatBox).textContent = categoryIcon(name.value);
+        newCatBox.querySelectorAll('[data-newicon]').forEach((b) => {
+          const on = b.dataset.newicon === icon;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-checked', String(on));
+        });
+      };
+      newCatBox.querySelectorAll('[data-newicon]').forEach((b) => b.addEventListener('click', () => { icon = b.dataset.newicon; paintIcons(); }));
+      name.addEventListener('input', paintIcons);
+      paintIcons();
+      const add = () => {
+        const n = name.value.trim();
+        if (!n) { toast('Enter a name'); name.focus(); return; }
+        const same = store.categories(space.id, { includeArchived: true }).find((c) => c.kind === kind && c.name.trim().toLocaleLowerCase() === n.toLocaleLowerCase());
+        // A name that is already there (maybe hidden) is used instead of making a second one.
+        const c = same || store.addCategory({ spaceId: space.id, name: n, kind, icon });
+        if (same?.archived) store.updateCategory(same.id, { archived: false });
+        categoryId = c.id;
+        closeNewCat();
+        paint();
+        toast(same ? `"${same.name}" picked` : `Category "${c.name}" added`);
+      };
+      name.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+      $('#newCatAdd', newCatBox).addEventListener('click', add);
+      $('#newCatCancel', newCatBox).addEventListener('click', closeNewCat);
+      name.focus();
+    }
     root.querySelectorAll('[data-kind]').forEach((b) => b.addEventListener('click', () => {
-      if (kind !== b.dataset.kind) { kind = b.dataset.kind; categoryId = null; paint(); }
+      if (kind !== b.dataset.kind) { kind = b.dataset.kind; categoryId = null; closeNewCat(); paint(); }
     }));
     paint();
 
@@ -412,8 +509,18 @@ function openTxSheet(tx, preset = {}) {
     const itemsWrap = $('#itemsWrap', root);
     const cmpHtml = (it) => {
       if (!it.name || !it.price) return '';
-      const prev = store.previousPrice(it.name, $('#date', root).value || todayKey(), tx?.id);
-      return `${changeBadge(prev ? pctChange(it.price, prev.price) : null)}${prev ? `<small>was ${money(prev.price)} on ${esc(dayLabel(prev.date))}</small>` : ''}`;
+      const shop = $('#shop', root).value.trim();
+      const prev = store.previousPrice(it.name, $('#date', root).value || todayKey(), tx?.id, shop);
+      const elsewhere = prev?.store && shop && !sameStore(prev.store, shop) ? ` at ${esc(prev.store)}` : '';
+      const per = it.unit === 'kg' ? '/kg' : '';
+      const each = pricePerUnit(it);
+      const amount = it.unit === 'kg' ? `${String(it.qty).replace('.', ',')} kg ×` : `${it.qty} ×`;
+      if (it.qty && each === null) {
+        // Quantity × price of one ≠ line total: something is misread. Show it so it can be fixed.
+        return `<small class="item-qty">⚠️ ${amount} ${money(it.unitPrice)}${per} is not ${money(it.price)}. Check this price; until it adds up, this line is left out of the price history.</small>`;
+      }
+      const qty = it.qty ? `<small class="item-qty">${amount} ${money(each)}${per}</small>` : '';
+      return `${qty}${changeBadge(prev ? pctChange(each, prev.price) : null)}${prev ? `<small>was ${money(prev.price)}${prev.unit === 'kg' ? '/kg' : ''}${elsewhere} on ${esc(dayLabel(prev.date))}</small>` : ''}`;
     };
     const itemsTotal = () => items.reduce((s, it) => s + (it.price || 0), 0);
     const paintItems = () => {
@@ -434,7 +541,10 @@ function openTxSheet(tx, preset = {}) {
         const i = Number(inp.dataset.i);
         inp.addEventListener('input', () => {
           if (inp.dataset.f === 'name') items[i].name = inp.value.trim();
-          else { const c = toCents(inp.value); items[i].price = Number.isFinite(c) ? c : 0; }
+          else {
+            const c = toCents(inp.value);
+            items[i].price = Number.isFinite(c) ? c : 0;
+          }
           // Update the comparison while typing, so nothing jumps around when the field loses focus.
           $(`[data-cmp="${i}"]`, itemsWrap).innerHTML = cmpHtml(items[i]);
           $('#itemsTotal', itemsWrap).textContent = money(itemsTotal());
@@ -449,7 +559,10 @@ function openTxSheet(tx, preset = {}) {
       $('#useTotal', itemsWrap)?.addEventListener('click', () => { $('#amount', root).value = centsToInput(itemsTotal()); });
     };
     paintItems();
-    $('#date', root).addEventListener('change', paintItems);
+    // A date picked by hand wins over the one read from a receipt.
+    let dateTouched = false;
+    $('#date', root).addEventListener('change', () => { dateTouched = true; paintItems(); });
+    $('#shop', root).addEventListener('change', paintItems);
 
     const thumb = $('#thumb', root);
     const showThumb = (blob) => {
@@ -483,14 +596,31 @@ function openTxSheet(tx, preset = {}) {
         });
         console.debug('Receipt text:', text);
         const found = parseReceipt(text);
+        const shop = findStore(text);
+        if (shop && !$('#shop', root).value.trim()) $('#shop', root).value = shop;
+        const day = findDate(text);
+        let dateNote = '';
+        if (day && !dateTouched && day !== $('#date', root).value) {
+          $('#date', root).value = day;
+          const [y, m, d] = day.split('-');
+          dateNote = ` Date from the receipt: ${d}.${m}.${y}.`;
+        }
         if (found.length) {
           items = found;
-          status.textContent = `Found ${found.length} items. Check names and prices, then save.`;
           // Prefer the printed total (it includes discounts); otherwise add up the items.
-          const total = findTotal(text) || found.reduce((s, it) => s + it.price, 0);
+          const printed = findTotal(text);
+          const sum = found.reduce((s, it) => s + it.price, 0);
+          const total = printed || sum;
+          // A misread digit (5 as 9, 1 as 7) would show up later as a fake price jump, so say
+          // when the items don't add up to the printed total.
+          status.textContent = printed && printed !== sum
+            ? `Found ${found.length} items. They add up to ${money(sum)}, but the receipt total is ${money(printed)}: a price may be misread (or there is a discount). Check the prices, then save.`
+            : `Found ${found.length} items. Check names and prices, then save.`;
+          status.textContent += dateNote;
+          status.classList.toggle('warn', !!printed && printed !== sum);
           if (!$('#amount', root).value) $('#amount', root).value = centsToInput(total);
         } else {
-          status.textContent = 'Could not find item lines. You can add items by hand.';
+          status.textContent = 'Could not find item lines. You can add items by hand.' + dateNote;
         }
       } catch (err) {
         console.warn(err);
@@ -509,7 +639,7 @@ function openTxSheet(tx, preset = {}) {
       if (!categoryId) { toast('Pick a category'); return; }
       if (!date) { toast('Pick a date'); return; }
       saving = true;
-      const cleanItems = kind === 'expense' ? items.filter((it) => it.name && it.price > 0).map((it) => ({ name: it.name, price: it.price })) : [];
+      const cleanItems = kind === 'expense' ? items.filter((it) => it.name && it.price > 0).map((it) => cleanItem({ name: it.name, price: it.price, qty: it.qty, unit: it.unit, unitPrice: it.unitPrice })) : [];
       if (newPhoto) {
         try {
           await putPhoto(newPhoto.id, newPhoto.blob);
@@ -518,7 +648,8 @@ function openTxSheet(tx, preset = {}) {
         } catch { toast('Could not save the photo'); }
       }
       const payload = { spaceId: space.id, categoryId, kind, amount, date, note: $('#note', root).value.trim() };
-      if (kind === 'expense') { payload.items = cleanItems; payload.receiptId = receiptId; }
+      if (kind === 'expense') { payload.items = cleanItems; payload.receiptId = receiptId; payload.store = $('#shop', root).value.trim(); }
+      else if (tx?.store) payload.store = '';
       let msg = tx ? 'Saved' : 'Added';
       if (tx && !store.updateTransaction(tx.id, payload)) {
         // The other phone deleted this entry while it was open here: keep this person's edit.
@@ -541,9 +672,16 @@ function openTxSheet(tx, preset = {}) {
 }
 
 function renderPrices() {
-  const groups = [...store.itemHistory().values()];
+  const all = [...store.itemHistory().values()];
+  // Shops seen on receipts. Prices differ from shop to shop, so each % is worked out between
+  // purchases at the same shop; the chips show one shop only.
+  const shops = [...new Map(all.flatMap((g) => g.entries).filter((e) => e.store).map((e) => [normalizeItem(e.store), e.store])).values()].sort((a, b) => a.localeCompare(b));
+  if (state.priceStore && !shops.some((s) => sameStore(s, state.priceStore))) state.priceStore = null;
+  const pick = state.priceStore;
   const q = normalizeItem(state.priceQuery || '');
-  const shown = groups.filter((g) => !q || g.key.includes(q))
+  const shown = all
+    .map((g) => ({ ...g, entries: pick ? g.entries.filter((e) => sameStore(e.store, pick)) : g.entries }))
+    .filter((g) => g.entries.length && (!q || g.key.includes(q)))
     .sort((a, b) => b.entries.at(-1).date.localeCompare(a.entries.at(-1).date));
 
   const spark = (entries) => {
@@ -553,25 +691,30 @@ function renderPrices() {
     const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${max === min ? h / 2 : h - ((v - min) / (max - min)) * (h - 4) - 2}`).join(' ');
     return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
   };
+  const kg = (e) => (e.unit === 'kg' ? '/kg' : '');
 
   const rows = shown.map((g) => {
-    const first = g.entries[0], last = g.entries.at(-1), prev = g.entries.at(-2);
-    const sinceFirst = g.entries.length > 1 ? pctChange(last.price, first.price) : null;
+    const tr = storeTrend(g.entries); // at the shop of the newest purchase
+    const last = tr.last, prev = tr.entries.at(-2);
     const open = state.openItem === g.key;
     return `<li class="price-row"><button data-item="${esc(g.key)}">
         <div class="price-main"><div class="tx-cat">${esc(g.name)}</div>
-          <div class="tx-meta">${g.entries.length}× · ${esc(dayLabel(last.date))}${prev ? ` · before ${money(prev.price)}` : ''}</div></div>
-        ${spark(g.entries)}
-        <div class="price-right"><div class="tx-amt">${money(last.price)}</div>${g.entries.length > 1 ? changeBadge(sinceFirst) : ''}</div>
+          <div class="tx-meta">${tr.store ? `${esc(tr.store)} · ` : ''}${tr.entries.length}× · ${esc(dayLabel(last.date))}${prev ? ` · before ${money(prev.price)}${kg(prev)}` : ''}</div></div>
+        ${spark(tr.entries)}
+        <div class="price-right"><div class="tx-amt">${money(last.price)}${last.unit === 'kg' ? '<small>/kg</small>' : ''}</div>${g.entries.length > 1 ? changeBadge(tr.change) : ''}</div>
       </button>
-      ${open ? `<ul class="price-hist">${g.entries.slice().reverse().map((e) => `<li><span>${esc(dayLabel(e.date))}</span><span>${money(e.price)}</span></li>`).join('')}</ul>` : ''}
+      ${open ? `<ul class="price-hist">${g.entries.slice().reverse().map((e) => `<li><span>${esc(dayLabel(e.date))}${e.store ? ` · ${esc(e.store)}` : ''}</span><span>${money(e.price)}${kg(e)}</span></li>`).join('')}</ul>` : ''}
     </li>`;
   }).join('');
 
   view.innerHTML = `
     <section class="card"><h2>Grocery prices over time</h2>
-      <p class="note" style="margin:0 0 10px">Every item from your receipts, newest first. The % is the change since the first time you bought it. Tap an item for its history.</p>
+      <p class="note" style="margin:0 0 10px">Every item from your receipts, newest first. The % is the change since the first time you bought it at the same shop, per piece or per kg. Tap an item for its history.</p>
       <label class="field"><input id="priceSearch" type="search" aria-label="Search items" placeholder="Search items" value="${esc(state.priceQuery || '')}"></label>
+      ${shops.length ? `<div class="chips shop-chips" role="group" aria-label="Shop">
+        <button type="button" class="chip${pick ? '' : ' on'}" data-shop="" aria-pressed="${!pick}">All shops</button>
+        ${shops.map((s) => `<button type="button" class="chip${pick && sameStore(s, pick) ? ' on' : ''}" data-shop="${esc(s)}" aria-pressed="${!!pick && sameStore(s, pick)}">${esc(s)}</button>`).join('')}
+      </div>` : ''}
       ${rows ? `<ul class="tx-list">${rows}</ul>` : '<p class="empty-note">No items yet. Add a receipt photo to an expense and the items will show up here.</p>'}
     </section>`;
   const search = $('#priceSearch');
@@ -580,6 +723,10 @@ function renderPrices() {
     renderPrices();
     const s2 = $('#priceSearch'); s2.focus(); s2.setSelectionRange(s2.value.length, s2.value.length);
   });
+  view.querySelectorAll('[data-shop]').forEach((b) => b.addEventListener('click', () => {
+    state.priceStore = b.dataset.shop || null;
+    renderPrices();
+  }));
   view.querySelectorAll('[data-item]').forEach((b) => b.addEventListener('click', () => {
     state.openItem = state.openItem === b.dataset.item ? null : b.dataset.item;
     renderPrices();
@@ -703,6 +850,20 @@ startCloud(store).then(async (s) => {
   } catch (e) { console.warn('sync', e); }
 }).catch((e) => console.warn('sync not started', e));
 
+// Updates: a home-screen app on iPhone is usually resumed, not restarted, so check for a new
+// version whenever the app comes back to the screen, and reload once it is installed. Never
+// reload while the add/edit screen is open, so nothing typed is lost; wait until it closes.
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloadWanted = false;
+  const reloadIfIdle = () => { if (reloadWanted && !document.querySelector('#sheet')?.open) { reloadWanted = false; location.reload(); } };
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) { reloadWanted = true; reloadIfIdle(); } });
+  document.querySelector('#sheet')?.addEventListener('close', () => setTimeout(reloadIfIdle, 300));
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      reg.update().catch(() => {});
+      reloadIfIdle();
+    });
+  }).catch(() => {});
 }

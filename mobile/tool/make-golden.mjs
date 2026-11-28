@@ -57,8 +57,55 @@ function line() {
 const receipts = [];
 for (let i = 0; i < 4000; i++) {
   const text = Array.from({ length: int(1, 18) }, line).join(rnd() < 0.2 ? '\r\n' : '\n');
-  receipts.push({ text, items: receipt.parseReceipt(text), total: receipt.findTotal(text) });
+  receipts.push({ text, items: receipt.parseReceipt(text), total: receipt.findTotal(text), store: receipt.findStore(text) });
 }
+// Receipts with quantities and weights (on the line below, above, or with the total), and
+// litres misread as "1": made with their own random numbers so the cases above stay the same.
+const keep = seed;
+seed = 20261127;
+const qtyNames = ['BANANE', 'Paradižnik', 'JOGURT NAVADNI 180G', 'Piščančje prsi', 'Mleko pilos 3,5% 11', 'Radenska 1,51',
+  'Oljčno olje 0,751', 'Olje vita d\'or 11', 'KRUH 5006', 'Jabolka', 'SIR 1509', 'Voda 0,51'];
+const qtyLine = (q, each) => pick([`${q} x ${each}`, `${q} kg x ${each} EUR/kg`, `${q} kom x ${each}`, `${q}*${each}`, `${q} g x ${each}`, `${q} kos. x ${each}`]);
+for (let i = 0; i < 1500; i++) {
+  const ls = [];
+  for (let k = int(1, 8); k > 0; k--) {
+    const nm = pick(qtyNames);
+    const each = int(10, 1500);
+    const q = pick([2, 3, int(2, 6), `0,${int(100, 999)}`, `1,${int(0, 999)}`, `${int(100, 900)}`, 1]);
+    const qn = Number(String(q).replace(',', '.'));
+    const tot = rnd() < 0.8 ? Math.round(qn * each) : int(10, 3000); // sometimes it doesn't add up (a misread)
+    const eur = (c) => `${Math.floor(c / 100)},${String(c % 100).padStart(2, '0')}`;
+    const r = rnd();
+    if (r < 0.35) ls.push(nm, `  ${qtyLine(q, eur(each))}${pad()}${eur(tot)}${tail()}`);
+    else if (r < 0.6) ls.push(`${nm}${pad()}${eur(tot)}${tail()}`, `  ${qtyLine(q, eur(each))}`);
+    else if (r < 0.8) ls.push(qtyLine(q, eur(each)), `${nm}${pad()}${eur(tot)}${tail()}`);
+    else ls.push(`${nm}${pad()}${eur(tot)}${tail()}`);
+    if (rnd() < 0.15) ls.push(line());
+  }
+  const text = ls.join('\n');
+  receipts.push({ text, items: receipt.parseReceipt(text), total: receipt.findTotal(text), store: receipt.findStore(text) });
+}
+seed = keep;
+// Weight and count lines as phone text readers give them: no line total, sometimes a space after
+// the comma ("1,238 kg x 1, 36"), above or below the product.
+const seedBefore = seed;
+seed = 20261130;
+for (let i = 0; i < 400; i++) {
+  const lines = [];
+  for (let k = 0; k < int(1, 6); k++) {
+    const nm = pick(names), each = int(10, 2000), byKg = rnd() < 0.6;
+    const q = byKg ? int(100, 2500) / 1000 : int(2, 6);
+    const total = Math.round(q * each) + (rnd() < 0.15 ? int(-50, 50) : 0);
+    const eachText = `${Math.floor(each / 100)},${rnd() < 0.3 ? ' ' : ''}${String(each % 100).padStart(2, '0')}`;
+    const qLine = `${String(q).replace('.', ',')} ${byKg ? pick(['kg', 'KG', 'kg.']) : pick(['kom', 'KOS', ''])} ${pick(['x', 'X', '*', '×'])} ${eachText}${rnd() < 0.2 ? ' EUR/kg' : ''}`;
+    const item = `${nm} ${Math.floor(total / 100)},${String(Math.abs(total) % 100).padStart(2, '0')}${rnd() < 0.3 ? ' B' : ''}`;
+    if (rnd() < 0.5) lines.push(item, qLine); else lines.push(qLine, item);
+  }
+  if (rnd() < 0.5) lines.push(`SKUPAJ EUR ${price()}`);
+  const text = lines.join('\n');
+  receipts.push({ text, items: receipt.parseReceipt(text), total: receipt.findTotal(text), store: receipt.findStore(text) });
+}
+seed = seedBefore; // the files below stay as they were
 writeFileSync(`${out}/receipts.json`, JSON.stringify(receipts));
 
 // ---------- money typing ----------
@@ -121,4 +168,95 @@ for (let i = 0; i < 300; i++) {
 writeFileSync(`${out}/webdata.json`, s.exportJSON());
 writeFileSync(`${out}/webanswers.json`, JSON.stringify({ summaries, entryOrder, history, previous }));
 writeFileSync(`${out}/webinitial.json`, JSON.stringify(store.createInitialData()));
+
+// Price history with quantities: the price of one piece / one kilo.
+seed = 20261128;
+const q = new store.Store(new Mem());
+const qcat = q.data.categories.find((c) => c.spaceId === 'sp_personal_tosve' && c.name === 'Groceries').id;
+const qnames = ['BANANE', 'Banane', 'JOGURT 180G', 'Jogurt 180g', 'Piščančje prsi', 'MLEKO 1L'];
+for (let i = 0; i < 300; i++) {
+  const its = Array.from({ length: int(1, 4) }, () => {
+    const price = int(10, 2000);
+    const r = rnd();
+    if (r < 0.3) return { name: pick(qnames), price };
+    const qty = r < 0.6 ? int(2, 5) : int(100, 2500) / 1000;
+    const unitPrice = rnd() < 0.7 ? Math.round(price / qty) : int(10, 2000); // sometimes it doesn't add up
+    return { name: pick(qnames), price, qty, ...(r >= 0.6 || rnd() < 0.1 ? { unit: 'kg' } : {}), unitPrice };
+  });
+  q.addTransaction({ spaceId: 'sp_personal_tosve', categoryId: qcat, kind: 'expense', amount: int(1, 9000), date: `${pick(months)}-${String(int(1, 28)).padStart(2, '0')}`, items: its });
+}
+const qprev = [];
+for (let i = 0; i < 200; i++) {
+  const nm = pick(qnames), d = `${pick(months)}-${String(int(1, 28)).padStart(2, '0')}`;
+  qprev.push({ name: nm, before: d, result: q.previousPrice(nm, d) });
+}
+writeFileSync(`${out}/quantities.json`, JSON.stringify({
+  data: q.data,
+  history: [...q.itemHistory().values()].map((g) => ({ key: g.key, prices: g.entries.map((e) => e.price), units: g.entries.map((e) => e.unit ?? null) })),
+  previous: qprev,
+}));
+// Shops: which shop a receipt is from, and prices compared at the same shop.
+seed = 20261129;
+const heads = ['MERCATOR d.d.', 'Mercator Center Šiška', 'MERCAT0R', 'INTERSPAR Vič', 'SPAR Slovenija d.o.o.', 'Lidl Slovenija d.o.o. k.d.',
+  'LIDL', 'L1DL', 'HOFER trgovina d.o.o.', 'H0FER', 'ENGROTUŠ d.o.o.', 'Supermarket Tuš Bežigrad', 'TUŠ', 'tuševa ulica 3', 'Eurospin',
+  'dm-drogerie markt', 'MÜLLER', 'Mueller', 'Kaufland', 'KONZUM plus', 'Maxi', 'Bingo d.o.o.', 'ALDI', 'Billa', 'PETROL d.d.', 'OMV Slovenija',
+  'Trgovina Kos', 'Sparkling 0,99', 'Spargelj 1,99', 'E.Leclerc', 'Jager', 'Merkur', ''];
+const storeTexts = [];
+for (let i = 0; i < 800; i++) {
+  const lines = Array.from({ length: int(0, 9) }, () => (rnd() < 0.5 ? pick(names) + ' ' + price() : pick(skipLines)));
+  const at = rnd() < 0.7 ? int(0, Math.min(lines.length, 7)) : lines.length;
+  lines.splice(at, 0, pick(heads));
+  if (rnd() < 0.2) lines.splice(int(0, lines.length), 0, pick(heads));
+  const text = lines.join(pick(['\n', '\r\n'])) + (rnd() < 0.2 ? '\n\n  ' : '');
+  storeTexts.push({ text, store: receipt.findStore(text) });
+}
+const w = new store.Store(new Mem());
+const wcat = w.data.categories.find((c) => c.spaceId === 'sp_personal_tosve' && c.name === 'Groceries').id;
+const shops = ['Mercator', 'MERCATOR', 'Spar', 'SPAR ', 'Lidl', 'Tuš', 'Hofer', '', ''];
+for (let i = 0; i < 300; i++) {
+  const its = Array.from({ length: int(1, 4) }, () => ({ name: pick(qnames), price: int(10, 2000) }));
+  w.addTransaction({ spaceId: 'sp_personal_tosve', categoryId: wcat, kind: 'expense', amount: int(1, 9000), date: `${pick(months)}-${String(int(1, 28)).padStart(2, '0')}`, items: its, store: pick(shops) });
+}
+const trendOf = (t) => ({ store: t.store, prices: t.entries.map((e) => e.price), change: t.change });
+const wprev = [];
+for (let i = 0; i < 300; i++) {
+  const nm = pick(qnames), d = `${pick(months)}-${String(int(1, 28)).padStart(2, '0')}`, sh = pick([...shops, 'Eurospin', undefined]);
+  wprev.push({ name: nm, before: d, store: sh ?? null, result: w.previousPrice(nm, d, undefined, sh) });
+}
+writeFileSync(`${out}/stores.json`, JSON.stringify({
+  texts: storeTexts,
+  data: w.data,
+  history: [...w.itemHistory().values()].map((g) => ({
+    key: g.key, stores: g.entries.map((e) => e.store), trend: trendOf(store.storeTrend(g.entries)), spar: trendOf(store.storeTrend(g.entries, 'spar')),
+  })),
+  previous: wprev,
+}));
+// Dates: the day of the purchase, read from the receipt, for a given "today".
+seed = 20261128;
+const p2 = (n) => String(n).padStart(2, '0');
+const dateTexts = [];
+for (let i = 0; i < 1500; i++) {
+  const today = new Date(Date.UTC(int(2025, 2028), int(0, 11), int(1, 28)));
+  const todayKey = today.toISOString().slice(0, 10);
+  const lines = Array.from({ length: int(0, 8) }, () => pick([pick(names) + ' ' + price(), pick(skipLines), `${int(1, 9)} x ${price()} ${price()}`,
+    `Račun št.: ${p2(int(1, 99))}-${int(1000, 9999)}-${p2(int(10, 99))}`, `Rok uporabe ${p2(int(1, 31))}.${p2(int(1, 12))}.${int(2026, 2029)}`,
+    `1.234,56`, `12.345,67 EUR`, `Tel. 01 234 56 78`, `ZOI: ${int(100000, 999999)}`, `${p2(int(0, 23))}:${p2(int(0, 59))}`]));
+  for (let k = 0; k < int(0, 2); k++) {
+    const d = new Date(today.getTime() + int(-500, 5) * 86400000);
+    let [y, m, dd] = [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()];
+    if (rnd() < 0.08) dd = pick([30, 31, 32, 0]); // not a real day (sometimes)
+    if (rnd() < 0.04) m = pick([13, 0]);
+    const sep = pick(['.', '.', '.', '/', '-', ',', ' . ', '. ']);
+    const date = pick([
+      `${p2(dd)}${sep}${p2(m)}${sep}${y}`, `${dd}${sep}${m}${sep}${y}`, `${p2(dd)}${sep}${p2(m)}${sep}${String(y).slice(2)}`,
+      `${y}-${p2(m)}-${p2(dd)}`,
+    ]);
+    const time = pick(['', ` ${p2(int(0, 23))}:${p2(int(0, 59))}`, ` ob ${int(0, 23)}.${p2(int(0, 59))}`, `  ${p2(int(0, 23))}:${p2(int(0, 59))}:${p2(int(0, 59))}`]);
+    const line = pick([`${date}${time}`, `Datum: ${date}${time}`, `${time.trim()} ${date}`, `Blagajna 3 ${date}${time}`]);
+    lines.splice(int(0, lines.length), 0, line);
+  }
+  const text = lines.join(pick(['\n', '\r\n']));
+  dateTexts.push({ text, today: todayKey, date: receipt.findDate(text, todayKey) });
+}
+writeFileSync(`${out}/dates.json`, JSON.stringify({ texts: dateTexts }));
 console.log(`Wrote golden files to ${out}: ${receipts.length} receipts, ${money.length} money inputs, ${normalized.length} names, ${s.data.transactions.length} entries.`);

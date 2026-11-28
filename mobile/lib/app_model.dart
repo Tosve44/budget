@@ -298,6 +298,7 @@ class AppModel extends ChangeNotifier {
     Plan plan = Plan.full,
     ReceiptReader? reader,
     FakePurchases? purchases,
+    DateTime Function()? now,
   }) {
     final store = BudgetStore(storage: MemoryStorage());
     if (asMilica) store.setCurrentUser('u_milica');
@@ -310,6 +311,7 @@ class AppModel extends ChangeNotifier {
       picker: const SamplePhotoPicker(),
       purchases: purchases ?? FakePurchases(),
       everyoneHasPremium: plan == Plan.full,
+      now: now,
     );
   }
 }
@@ -333,7 +335,7 @@ class DemoData {
       kind: EntryKind.expense,
       amount: 4550,
       date: '$month-01',
-      items: const [
+      items: [
         ReceiptItem(name: 'MLEKO ALPSKO 3,5% 1L', price: 119),
         ReceiptItem(name: 'KRUH BELI 500G', price: 149),
       ],

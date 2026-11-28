@@ -159,6 +159,8 @@ button.stat:active { background: var(--accent-soft); }
   overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
 }
 .sheet::backdrop { background: rgb(0 0 0 / 0.4); }
+.grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--muted); opacity: 0.45; margin: 8px auto 0; }
+.sheet .sheet-inner { padding-top: 10px; }
 .sheet-inner { padding: 16px 16px calc(env(safe-area-inset-bottom) + 20px); }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .sheet-head h3 { margin: 0; font-size: 1.059rem; }
@@ -226,8 +228,11 @@ button.stat:active { background: var(--accent-soft); }
 .item-row:first-child { border-top: 0; }
 .item-row input { min-width: 0; border: 1px solid var(--line); background: var(--surface-2); border-radius: 10px; padding: 8px 10px; font-size: max(16px, 0.941rem); }
 .item-price { text-align: right; font-variant-numeric: tabular-nums; }
-.item-cmp { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; font-size: 0.765rem; color: var(--muted); }
+.item-cmp { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 0.765rem; color: var(--muted); }
 .item-cmp:empty { display: none; }
+.item-cmp .item-qty { color: var(--text); font-weight: 600; }
+#ocrStatus.warn { color: var(--text); font-weight: 600; }
+#ocrStatus.warn::before { content: "⚠️ "; }
 .items-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .badge { display: inline-block; border-radius: 99px; padding: 1px 8px; font-size: 0.706rem; font-weight: 600; white-space: nowrap; }
 .badge.up { background: color-mix(in srgb, var(--over) 16%, transparent); color: var(--over); }
@@ -264,3 +269,10 @@ button.stat:active { background: var(--accent-soft); }
 .icon-grid button.on { border: 2px solid var(--accent); background: var(--accent-soft); }
 .icon-grid .icon-auto { grid-column: span 2; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .icon-grid .icon-auto small { font-size: 0.765rem; color: var(--muted); }
+
+/* "+ New category" on the add-entry sheet, and the small form it opens there. */
+.chip.chip-new { border-style: dashed; background: transparent; color: var(--accent); }
+.new-cat { margin: 4px 0 12px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); }
+.new-cat .icon-grid { max-height: 150px; overflow-y: auto; }
+.new-cat-actions { display: flex; gap: 8px; margin-top: 10px; }
+.new-cat-actions button { flex: 1; margin: 0; }

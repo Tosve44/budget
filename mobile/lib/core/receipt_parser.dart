@@ -34,9 +34,18 @@ class ReceiptParser {
   static final _semi = RegExp(r'[;:]');
   static final _junk = RegExp(r'[|_~*#"]+');
   static final _leadingNumbers = RegExp(r'^[\d.,\s]+(?=\p{L})', unicode: true);
+  static final _unitPriceLine = RegExp(r'^[\d.,]+\s*(kom|kos|kg|g|pcs|st)\.?\s*[x×*]$', caseSensitive: false);
   static final _quantityOnly = RegExp(r'^[\d.,]+\s*(kom|kg|g|l|pcs|st)?\s*[x×*]\s*[\d.,]+', caseSensitive: false);
   static final _twoLetters = RegExp(r'\p{L}{2,}', unicode: true);
   static final _gramMisread = RegExp(r'\b(\d*[1-9]0{1,2})[69]\b');
+  static final _litreDecimal = RegExp(r'\b(\d,\d{1,2})1\b');
+  static final _litreAfterPercent = RegExp(r'(%\s?)11\b');
+  static final _litreAtEnd = RegExp(r'\b11$');
+  // The price of one may be read with a space after the comma ("1, 36").
+  static final _quantity = RegExp(
+    r'^([\d.,]+)\s*(kom|kos|kg|g|pcs|st)?\.?\s*[x×*]\s*(\d[\d.,]*[.,;:]\s\d{2}(?!\d)|[\d.,]+)',
+    caseSensitive: false,
+  );
 
   /// JavaScript's String.prototype.trim.
   static String jsTrim(String s) => s.replaceAll(_trim, '');
@@ -45,10 +54,118 @@ class ReceiptParser {
 
   static int? _cents(String priceText) => Money.cents(priceText.replaceAll(_semi, ',').replaceAll(' ', ''));
 
-  /// Common misreads in product names: "500G" read as "5006", "150g" as "1509".
+  /// Common misreads in product names: "500G" read as "5006", "150g" as "1509", and a small
+  /// "l" (litre) read as "1": "1,5l" as "1,51", "0,75l" as "0,751", "3,5% 1l" as "3,5% 11".
   static String fixName(String name) {
     final upper = name == name.toUpperCase();
-    return name.replaceAllMapped(_gramMisread, (m) => '${m[1]}${upper ? 'G' : 'g'}');
+    var n = name.replaceAllMapped(_gramMisread, (m) => '${m[1]}${upper ? 'G' : 'g'}');
+    if (!upper) {
+      n = n
+          .replaceAllMapped(_litreDecimal, (m) => '${m[1]}l')
+          .replaceAllMapped(_litreAfterPercent, (m) => '${m[1]}1l')
+          .replaceFirst(_litreAtEnd, '1l');
+    }
+    return n;
+  }
+
+  /// "2 x 0,59", "0,856 kg x 1,49", "350 g x 12,99": how many (or how much) and the price of
+  /// one (or of a kilo). null when the line doesn't say.
+  static ({double qty, String? unit, int? unitPrice})? readQuantity(String text) {
+    final m = _quantity.firstMatch(text);
+    if (m == null) return null;
+    var qty = double.tryParse(m[1]!.replaceFirst(',', '.'));
+    if (qty == null) return null;
+    final unitWord = (m[2] ?? '').toLowerCase();
+    if (unitWord == 'g') qty /= 1000;
+    if (!(qty > 0) || qty > 999 || qty == 1) return null;
+    final byWeight = unitWord == 'kg' || unitWord == 'g' || qty != qty.roundToDouble();
+    final each = Money.cents(m[3]!.replaceAll(_semi, ',').replaceAll(_spaces, ''));
+    return (qty: (qty * 1000).round() / 1000, unit: byWeight ? 'kg' : null, unitPrice: each != null && each > 0 ? each : null);
+  }
+
+  static ReceiptItem _withQuantity(ReceiptItem it, ({double qty, String? unit, int? unitPrice}) a) =>
+      ReceiptItem(name: it.name, price: it.price, qty: a.qty, unit: a.unit, unitPrice: a.unitPrice);
+
+  // Each name stands alone: not part of a longer word ("tuševa" is not Tuš), and letters like Š
+  // count as letters.
+  static final _stores = [
+    ('Mercator', 'merc[a@]t[o0]r'),
+    ('Spar', '(inter)?spar'),
+    ('Lidl', 'lid[l1i]'),
+    ('Hofer', 'h[o0]fer'),
+    ('Tuš', '(engro)?tu[sš]'),
+    ('Eurospin', 'eurospin'),
+    ('Jager', 'jager'),
+    ('E.Leclerc', 'leclerc'),
+    ('dm', r'dm[\s-]*drogerie'),
+    ('Müller', 'm(ü|ue|u)ller'),
+    ('Kaufland', 'kaufland'),
+    ('Konzum', 'konzum'),
+    ('Maxi', 'maxi'),
+    ('Bingo', 'bingo'),
+    ('Aldi', 'aldi'),
+    ('Billa', 'billa'),
+    ('Petrol', 'petrol'),
+    ('OMV', 'omv'),
+  ].map((s) => (s.$1, RegExp('(?<![\\p{L}\\p{N}])(?:${s.$2})(?![\\p{L}\\p{N}])', caseSensitive: false, unicode: true))).toList();
+
+  /// Which shop a receipt is from, from the name printed on it (usually in the first lines).
+  /// Covers the big chains in Slovenia and around; null if none is found. Same as findStore in
+  /// the web app's receipt.js.
+  static String? findStore(String text) {
+    final lines = text.split(_lineBreak).map(jsTrim).where((l) => l.isNotEmpty).toList();
+    // The shop's name is at the top; look there first, so a product name lower down (e.g. a
+    // "Spar" own brand bought elsewhere) doesn't win.
+    for (final part in [lines.take(6), lines]) {
+      for (final line in part) {
+        for (final (name, re) in _stores) {
+          if (re.hasMatch(line)) return name;
+        }
+      }
+    }
+    return null;
+  }
+
+  static final _dmy = RegExp(r'(?<![\d.,/-])(\d{1,2}) ?[.,/-] ?(\d{1,2}) ?[.,/-] ?(\d{4}|\d{2})(?![\d,]|[.,/-]\d)');
+  static final _ymd = RegExp(r'(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)');
+  static final _time = RegExp(r'(?<!\d)([01]?\d|2[0-3])[:.]([0-5]\d)(?![\d,])');
+  static final _notPurchase = RegExp(r'(rok|uporab|best|exp|valid|velja|vrijedi|važi|garanc)', caseSensitive: false); // best before...
+
+  /// The day of the purchase, as "YYYY-MM-DD"; null if none is printed (or it can't be right).
+  /// Receipts print "21.11.2026 14:05", "21.11.26", "21/11/2026" or "2026-11-21"; the reader may
+  /// see a dot as a comma or add spaces. Only real days from about a year ago up to tomorrow
+  /// count, so a price isn't taken, and lines like "best before" are skipped. The date next to a
+  /// time wins. Same as findDate in the web app's receipt.js.
+  static String? findDate(String text, {DateTime? today}) {
+    final t = today ?? DateTime.now();
+    final latest = DateTime(t.year, t.month, t.day + 1);
+    final earliest = DateTime(t.year - 1, t.month, t.day - 7);
+    String? ok(int y, int m, int d) {
+      final day = DateTime(y, m, d);
+      if (day.year != y || day.month != m || day.day != d) return null; // e.g. 31.02.
+      if (day.isAfter(latest) || day.isBefore(earliest)) return null;
+      return '$y-${m.toString().padLeft(2, '0')}-${d.toString().padLeft(2, '0')}';
+    }
+
+    String? first;
+    for (final line in text.split(RegExp(r'\r?\n'))) {
+      if (_notPurchase.hasMatch(line)) continue;
+      final found = <(String?, RegExpMatch)>[];
+      for (final m in _ymd.allMatches(line)) {
+        found.add((ok(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!)), m));
+      }
+      for (final m in _dmy.allMatches(line)) {
+        final y = m[3]!.length == 2 ? 2000 + int.parse(m[3]!) : int.parse(m[3]!);
+        found.add((ok(y, int.parse(m[2]!), int.parse(m[1]!)), m));
+      }
+      for (final (day, m) in found) {
+        if (day == null) continue;
+        final rest = '${line.substring(0, m.start)} ${line.substring(m.end)}';
+        if (_time.hasMatch(rest)) return day;
+        first ??= day;
+      }
+    }
+    return first;
   }
 
   /// The receipt's grand total ("SKUPAJ", "ZA PLAČILO", "TOTAL"...), which already includes
@@ -68,6 +185,7 @@ class ReceiptParser {
   /// Product lines with their prices, in the order they are printed.
   static List<ReceiptItem> parse(String text) {
     final items = <ReceiptItem>[];
+    final at = <int>[]; // the line of each item
     final lines = _lines(text).where((l) => l.isNotEmpty).toList();
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
@@ -79,12 +197,17 @@ class ReceiptParser {
       final price = _cents(m[1]!);
       if (price == null || price <= 0) continue;
       // Quantity lines like "2 x 1,29" or "0,750 kg x 199,99": the product name is usually on the line above.
+      // "0,620 kg x 1,85": the number at the end is the price of one kilo, not a line total. It is
+      // a quantity line (used below), not a product called "kg x".
+      if (_unitPriceLine.hasMatch(name)) continue;
       final qtyOnly = _quantityOnly.hasMatch(name);
       if (!qtyOnly && !_twoLetters.hasMatch(name)) continue; // e.g. a date and time "25.11.2026 10:15"
+      ({double qty, String? unit, int? unitPrice})? amount;
       if (qtyOnly) {
         final prev = i > 0 ? lines[i - 1] : null;
         final above = prev != null && !_priceAtEnd.hasMatch(prev) && !_skip.hasMatch(prev) ? prev : null;
         if (above != null && _twoLetters.hasMatch(above)) {
+          amount = readQuantity(name);
           name = above;
         } else {
           continue;
@@ -92,7 +215,27 @@ class ReceiptParser {
       }
       name = jsTrim(name.replaceAll(_junk, ' ').replaceAll(_spaces, ' ').replaceFirst(_leadingNumbers, ''));
       if (name.length < 2) continue;
-      items.add(ReceiptItem(name: fixName(name), price: price));
+      final item = ReceiptItem(name: fixName(name), price: price);
+      items.add(amount == null ? item : _withQuantity(item, amount));
+      at.add(i);
+    }
+    // Other layouts put the quantity on its own line, without the line total: below the product
+    // ("Paradižnik 1,15" then "0,620 kg x 1,85 EUR/kg", Lidl) or above it ("2 x 0,89" then
+    // "JOGURT 1,78", Mercator). Used when the numbers agree with that product's line total.
+    for (var i = 0; i < lines.length; i++) {
+      if (at.contains(i) || _skip.hasMatch(lines[i])) continue;
+      final a = readQuantity(lines[i]);
+      final each = a?.unitPrice;
+      if (a == null || each == null) continue;
+      for (final j in [i - 1, i + 1]) {
+        final k = at.indexOf(j);
+        if (k < 0) continue;
+        final it = items[k];
+        if (it.qty == null && ((a.qty * each).round() - it.price).abs() <= 1) {
+          items[k] = _withQuantity(it, a);
+          break;
+        }
+      }
     }
     return items;
   }
@@ -174,7 +317,12 @@ class TextLines {
     final rowH = <double>[];
     for (final p in ps) {
       final last = rows.length - 1;
-      if (last >= 0 && (y(p) - rowY[last]).abs() < 0.5 * (rowH[last] < p.height ? rowH[last] : p.height)) {
+      // Two pieces above each other in the same column are never one row, whatever the slope:
+      // otherwise a wrong slope can stack two item names ("MASLO 250G JAJCA M 10 KOM") into
+      // one line, which puts every price below it on the wrong item.
+      if (last >= 0 &&
+          (y(p) - rowY[last]).abs() < 0.5 * (rowH[last] < p.height ? rowH[last] : p.height) &&
+          !rows[last].any((q) => _overlapX(p, q))) {
         rows[last].add(p);
         final n = rows[last].length;
         rowY[last] = (rowY[last] * (n - 1) + y(p)) / n;
@@ -186,6 +334,13 @@ class TextLines {
       }
     }
     return rows;
+  }
+
+  /// The two pieces share more than a little of their width.
+  static bool _overlapX(TextPiece a, TextPiece b) {
+    final overlap = (a.maxX < b.maxX ? a.maxX : b.maxX) - (a.minX > b.minX ? a.minX : b.minX);
+    final narrow = (a.maxX - a.minX) < (b.maxX - b.minX) ? a.maxX - a.minX : b.maxX - b.minX;
+    return overlap > 0.3 * narrow;
   }
 
   /// The slope of the rows worked out from the left edge of the text: on a photo taken at an

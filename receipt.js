@@ -212,10 +212,88 @@ const SKIP = /\b(skupaj|za pla[čc]ilo|ddv|vrnjeno|vra[čc]ilo|zoi|eor|davčna|d
 // so a little junk between the price and the end of the line is allowed.
 const PRICE_AT_END = /(?<=^|[\s€:])(-?\d{1,3}(?:\.\d{3})+,\d{2}|-?\d+[.,;:] ?\d{2})[\s\W_]*(?:[A-ZĐŠČĆŽ€$]{1,3}|[a-e])?[\s\W_]*$/u;
 
-// Common misreads in product names: "500G" read as "5006", "150g" as "1509".
+// Common misreads in product names: "500G" read as "5006", "150g" as "1509", and a small
+// "l" (litre) read as "1": "1,5l" as "1,51", "0,75l" as "0,751", "3,5% 1l" as "3,5% 11".
 function fixName(name) {
   const upper = name === name.toUpperCase();
-  return name.replace(/\b(\d*[1-9]0{1,2})[69]\b/g, (_, n) => n + (upper ? 'G' : 'g'));
+  let n = name.replace(/\b(\d*[1-9]0{1,2})[69]\b/g, (_, d) => d + (upper ? 'G' : 'g'));
+  if (!upper) n = n.replace(/\b(\d,\d{1,2})1\b/g, '$1l').replace(/(%\s?)11\b/g, (_, pct) => `${pct}1l`).replace(/\b11$/, '1l');
+  return n;
+}
+
+// "2 x 0,59", "0,856 kg x 1,49", "350 g x 12,99": how many (or how much) and the price of one
+// (or of a kilo). Returns null when the line doesn't say.
+function readQuantity(text) {
+  // The price of one may be read with a space after the comma ("1, 36").
+  const m = String(text).match(/^([\d.,]+)\s*(kom|kos|kg|g|pcs|st)?\.?\s*[x×*]\s*(\d[\d.,]*[.,;:]\s\d{2}(?!\d)|[\d.,]+)/i);
+  if (!m) return null;
+  let qty = Number(m[1].replace(',', '.'));
+  const unitWord = (m[2] || '').toLowerCase();
+  if (unitWord === 'g') qty /= 1000;
+  if (!(qty > 0) || qty > 999 || qty === 1) return null;
+  const byWeight = unitWord === 'kg' || unitWord === 'g' || !Number.isInteger(qty);
+  const each = toCents(m[3].replace(/[;:]/g, ',').replace(/\s/g, ''));
+  return { qty: Math.round(qty * 1000) / 1000, unit: byWeight ? 'kg' : undefined, unitPrice: Number.isFinite(each) && each > 0 ? each : undefined };
+}
+
+// Which shop a receipt is from, from the name printed on it (usually in the first lines).
+// Covers the big chains in Slovenia and around; null if none is found.
+// Each name stands alone: not part of a longer word ("tuševa" is not Tuš), and letters like Š
+// count as letters (a plain \b would not see the end of "TUŠ").
+const STORES = [
+  ['Mercator', 'merc[a@]t[o0]r'], ['Spar', '(inter)?spar'], ['Lidl', 'lid[l1i]'],
+  ['Hofer', 'h[o0]fer'], ['Tuš', '(engro)?tu[sš]'], ['Eurospin', 'eurospin'], ['Jager', 'jager'],
+  ['E.Leclerc', 'leclerc'], ['dm', 'dm[\\s-]*drogerie'], ['Müller', 'm(ü|ue|u)ller'], ['Kaufland', 'kaufland'],
+  ['Konzum', 'konzum'], ['Maxi', 'maxi'], ['Bingo', 'bingo'], ['Aldi', 'aldi'], ['Billa', 'billa'],
+  ['Petrol', 'petrol'], ['OMV', 'omv'],
+].map(([name, re]) => [name, new RegExp(`(?<![\\p{L}\\p{N}])(?:${re})(?![\\p{L}\\p{N}])`, 'iu')]);
+export function findStore(text) {
+  const lines = String(text).split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  // The shop's name is at the top; look there first, so a product name lower down (e.g. a
+  // "Spar" own brand bought elsewhere) doesn't win.
+  for (const part of [lines.slice(0, 6), lines]) {
+    for (const line of part) {
+      for (const [name, re] of STORES) if (re.test(line)) return name;
+    }
+  }
+  return null;
+}
+
+// The day of the purchase, as "YYYY-MM-DD"; null if none is printed (or it can't be right).
+// Receipts print "21.11.2026 14:05", "21.11.26", "21/11/2026" or "2026-11-21"; the reader may
+// see a dot as a comma or add spaces. Only real days from about a year ago up to tomorrow count,
+// so a price isn't taken, and lines like "best before" are skipped. The date next to a time wins.
+const DMY = /(?<![\d.,/-])(\d{1,2}) ?[.,/-] ?(\d{1,2}) ?[.,/-] ?(\d{4}|\d{2})(?![\d,]|[.,/-]\d)/g;
+const YMD = /(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)/g;
+const TIME = /(?<!\d)([01]?\d|2[0-3])[:.]([0-5]\d)(?![\d,])/;
+const NOT_PURCHASE = /(rok|uporab|best|exp|valid|velja|vrijedi|važi|garanc)/i; // best before, valid until...
+export function findDate(text, today = new Date()) {
+  const t = typeof today === 'string' ? new Date(`${today}T12:00:00`) : today;
+  const latest = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1);
+  const earliest = new Date(t.getFullYear() - 1, t.getMonth(), t.getDate() - 7);
+  const ok = (y, m, d) => {
+    const day = new Date(y, m - 1, d);
+    if (day.getFullYear() !== y || day.getMonth() !== m - 1 || day.getDate() !== d) return null; // e.g. 31.02.
+    if (day > latest || day < earliest) return null;
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  };
+  let first = null;
+  for (const line of String(text).split(/\r?\n/)) {
+    if (NOT_PURCHASE.test(line)) continue;
+    const found = [];
+    for (const m of line.matchAll(YMD)) found.push([ok(+m[1], +m[2], +m[3]), m]);
+    for (const m of line.matchAll(DMY)) {
+      const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+      found.push([ok(y, +m[2], +m[1]), m]);
+    }
+    for (const [day, m] of found) {
+      if (!day) continue;
+      const rest = line.slice(0, m.index) + ' ' + line.slice(m.index + m[0].length);
+      if (TIME.test(rest)) return day;
+      first = first || day;
+    }
+  }
+  return first;
 }
 
 // The receipt's grand total ("SKUPAJ", "ZA PLAČILO", "TOTAL"...), which already includes discounts.
@@ -236,6 +314,7 @@ export function findTotal(text) {
 
 export function parseReceipt(text) {
   const items = [];
+  const at = new Map(); // item -> its line
   const lines = String(text).split(/\r?\n/).map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -247,16 +326,45 @@ export function parseReceipt(text) {
     const price = toCents(m[1].replace(/[;:]/g, ',').replace(/ /g, ''));
     if (!Number.isFinite(price) || price <= 0) continue;
     // Quantity lines like "2 x 1,29" or "0,750 kg x 199,99": the product name is usually on the line above.
+    // "0,620 kg x 1,85": the number at the end is the price of one kilo, not a line total. It is a
+    // quantity line (used below), not a product called "kg x".
+    if (/^[\d.,]+\s*(kom|kos|kg|g|pcs|st)\.?\s*[x×*]$/i.test(name)) continue;
     const qtyOnly = /^[\d.,]+\s*(kom|kg|g|l|pcs|st)?\s*[x×*]\s*[\d.,]+/i.test(name);
     if (!qtyOnly && !/\p{L}{2,}/u.test(name)) continue; // e.g. a date and time "25.11.2026 10:15"
+    let amount = null;
     if (qtyOnly) {
       const above = lines[i - 1] && !PRICE_AT_END.test(lines[i - 1]) && !SKIP.test(lines[i - 1]) ? lines[i - 1] : null;
-      if (above && /\p{L}{2,}/u.test(above)) name = above;
+      if (above && /\p{L}{2,}/u.test(above)) { amount = readQuantity(name); name = above; }
       else continue;
     }
     name = name.replace(/[|_~*#"]+/g, ' ').replace(/\s+/g, ' ').replace(/^[\d.,\s]+(?=\p{L})/u, '').trim();
     if (name.length < 2) continue;
-    items.push({ name: fixName(name), price });
+    const item = { name: fixName(name), price };
+    if (amount) addQuantity(item, amount);
+    items.push(item);
+    at.set(item, i);
+  }
+  // Other layouts put the quantity on its own line, without the line total: below the product
+  // ("Paradižnik 1,15" then "0,620 kg x 1,85 EUR/kg", Lidl) or above it ("2 x 0,89" then
+  // "JOGURT 1,78", Mercator). Use it when the numbers agree with that product's line total.
+  const byLine = new Map(items.map((it) => [at.get(it), it]));
+  for (let i = 0; i < lines.length; i++) {
+    if (byLine.has(i) || SKIP.test(lines[i])) continue;
+    const amount = readQuantity(lines[i]);
+    if (!amount || !amount.unitPrice) continue;
+    for (const j of [i - 1, i + 1]) {
+      const it = byLine.get(j);
+      if (it && !it.qty && Math.abs(Math.round(amount.qty * amount.unitPrice) - it.price) <= 1) { addQuantity(it, amount); break; }
+    }
   }
   return items;
+}
+
+function addQuantity(item, amount) {
+  item.qty = amount.qty;
+  if (amount.unit) item.unit = amount.unit;
+  // The printed price of one (or of a kilo) is exact; dividing the line total is off by a cent
+  // sometimes. Kept even when the numbers disagree: then one of them is misread, and the line is
+  // left out of the price history until the total is fixed (see pricePerUnit in store.js).
+  if (amount.unitPrice) item.unitPrice = amount.unitPrice;
 }

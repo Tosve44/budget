@@ -10,7 +10,10 @@
 //   categories:   [{ id, spaceId, name, kind: "expense" | "income", budget, order, archived, updatedAt? }],
 //   transactions: [{ id, spaceId, categoryId, kind, amount, date, note, createdBy, createdAt, updatedAt,
 //                    receiptId?,            // id of the receipt photo (stored separately, see photos.js)
-//                    items?: [{ name, price }] }]  // receipt lines, price = line total in cents
+//                    store?,                // the shop ("Mercator"), read from the receipt or typed
+//                    items?: [{ name, price, qty?, unit?, unitPrice? }] }]  // receipt lines, price = line total in cents;
+//                    // qty: how many (2) or how much (0.856 with unit "kg") when the receipt says so,
+//                    // unitPrice: the printed price of one piece or one kilo
 // }
 // Money is always stored as whole cents (integers) to avoid rounding errors.
 // Dates are "YYYY-MM-DD" strings; months are "YYYY-MM".
@@ -18,7 +21,7 @@
 const STORAGE_KEY = 'budget.v1';
 export const SCHEMA_VERSION = 1;
 // Limits that match the cloud database, so a row the phone saves can always be uploaded.
-export const LIMITS = { amount: 1000000000, note: 500, categoryName: 60, items: 300, itemName: 120 }; // amount: 10 million, in cents
+export const LIMITS = { amount: 1000000000, note: 500, categoryName: 60, items: 300, itemName: 120, store: 60 }; // amount: 10 million, in cents
 
 const PERSONAL_EXPENSES = [
   'Car', 'Rent', 'Groceries', 'Food & Drinks', 'Lunch at work', 'Nicotine', 'Gym & Sports',
@@ -150,11 +153,12 @@ export class Store {
 
   renameUser(id, name) { const u = this.user(id); if (u) { u.name = name; this.save(); } }
 
-  addTransaction({ spaceId, categoryId, kind, amount, date, note, items, receiptId }) {
+  addTransaction({ spaceId, categoryId, kind, amount, date, note, items, receiptId, store }) {
     const now = new Date().toISOString();
     const t = { id: uid('tx'), spaceId, categoryId, kind, amount, date, note: clip(note, LIMITS.note), createdBy: this.currentUser.id, createdAt: now, updatedAt: now };
     if (items && items.length) t.items = cleanItems(items);
     if (receiptId) t.receiptId = receiptId;
+    if (store && String(store).trim()) t.store = clip(String(store).trim(), LIMITS.store);
     this.data.transactions.push(t);
     this._changed('transactions', t.id);
     this.save();
@@ -165,6 +169,7 @@ export class Store {
     const t = this.data.transactions.find((x) => x.id === id);
     if (!t) return null;
     if ('note' in patch) patch = { ...patch, note: clip(patch.note, LIMITS.note) };
+    if ('store' in patch) patch = { ...patch, store: clip(String(patch.store || '').trim(), LIMITS.store) };
     if (patch.items) patch = { ...patch, items: cleanItems(patch.items) };
     Object.assign(t, patch, { updatedAt: new Date().toISOString() });
     this._changed('transactions', id);
@@ -219,26 +224,38 @@ export class Store {
     for (const t of this.data.transactions) {
       for (const it of t.items || []) {
         const key = normalizeItem(it.name);
-        if (!key) continue;
+        if (!key || pricePerUnit(it) === null) continue;
         if (!map.has(key)) map.set(key, { key, name: it.name, entries: [] });
-        map.get(key).entries.push({ date: t.date, price: it.price, txId: t.id, spaceId: t.spaceId, createdAt: t.createdAt });
+        // price: of one piece or one kilo (see pricePerUnit), so buying two, or a bigger bunch of
+        // bananas, does not look like a price rise.
+        map.get(key).entries.push({ date: t.date, price: pricePerUnit(it), unit: it.unit, store: t.store || '', txId: t.id, spaceId: t.spaceId, createdAt: t.createdAt });
       }
     }
-    for (const g of map.values()) g.entries.sort((a, b) => (a.date + a.createdAt).localeCompare(b.date + b.createdAt));
+    for (const g of map.values()) {
+      g.entries.sort((a, b) => (a.date + a.createdAt).localeCompare(b.date + b.createdAt));
+      // An item sold by weight: a purchase whose weight wasn't read (or was typed without it) has
+      // only the line total, which is not a price per kg. Leave it out rather than show a fake jump.
+      if (g.entries.some((e) => e.unit === 'kg')) g.entries = g.entries.filter((e) => e.unit === 'kg');
+    }
     return map;
   }
 
   // The most recent earlier price for an item name, not counting transaction `excludeTxId`.
-  previousPrice(name, beforeDate, excludeTxId) {
+  // With `store`: the latest earlier price at that shop, or at any shop when it was never bought
+  // there (then the result's `store` says where).
+  previousPrice(name, beforeDate, excludeTxId, store) {
     const key = normalizeItem(name);
-    let best = null;
+    let best = null, here = null;
     for (const t of this.data.transactions) {
       if (t.id === excludeTxId || t.date > beforeDate) continue;
       for (const it of t.items || []) {
-        if (normalizeItem(it.name) === key && (!best || t.date >= best.date)) best = { date: t.date, price: it.price };
+        if (normalizeItem(it.name) !== key || pricePerUnit(it) === null) continue;
+        const p = { date: t.date, price: pricePerUnit(it), ...(it.unit ? { unit: it.unit } : {}), ...(t.store ? { store: t.store } : {}) };
+        if (!best || t.date >= best.date) best = p;
+        if (store && sameStore(t.store, store) && (!here || t.date >= here.date)) here = p;
       }
     }
-    return best;
+    return here || best;
   }
 
   exportJSON() { return JSON.stringify(this.data, null, 2); }
@@ -281,7 +298,51 @@ export function categoryIcon(catOrName) {
 
 function clip(s, max) { return String(s || '').slice(0, max); }
 function cleanItems(items) {
-  return items.slice(0, LIMITS.items).map((it) => ({ ...it, name: clip(it.name, LIMITS.itemName) }));
+  return items.slice(0, LIMITS.items).map((it) => cleanItem({ ...it, name: clip(it.name, LIMITS.itemName) }));
+}
+
+// Keep a receipt line's quantity only when it makes sense. The printed price of one is kept even
+// when it doesn't add up (see pricePerUnit).
+export function cleanItem(it) {
+  const out = { ...it };
+  delete out.qty; delete out.unit; delete out.unitPrice;
+  const qty = Number(it.qty);
+  if (Number.isFinite(qty) && qty > 0 && qty <= 999 && qty !== 1) {
+    out.qty = Math.round(qty * 1000) / 1000;
+    if (it.unit === 'kg') out.unit = 'kg';
+    const up = Number(it.unitPrice);
+    if (Number.isInteger(up) && up > 0 && up <= LIMITS.amount) out.unitPrice = up;
+  }
+  return out;
+}
+
+// Price of one piece, or of one kilo, for comparing prices between shopping trips.
+// "2 x 0,59 = 1,18" is 0,59; "0,856 kg x 1,49 = 1,28" is 1,49 per kilo.
+// null when the quantity line doesn't add up to the line total (quantity × price of one ≠ total):
+// one of the three numbers was misread, and nobody can see or fix the quantity, so such a line is
+// left out of the price history rather than showing a made-up price. Fixing the total so it adds
+// up again brings it back.
+export function pricePerUnit(it) {
+  if (!(it.qty > 0)) return it.price;
+  if (!(it.unitPrice > 0)) return Math.round(it.price / it.qty);
+  return Math.abs(Math.round(it.qty * it.unitPrice) - it.price) <= 1 ? it.unitPrice : null;
+}
+
+export function sameStore(a, b) {
+  return normalizeItem(a || '') === normalizeItem(b || '');
+}
+
+// An item's price trend at one shop: prices change from shop to shop, so the change is worked out
+// between purchases at the same shop (by default the shop of the newest purchase). A purchase
+// without a shop (typed by hand, or saved before shops were kept) could be from any shop, so it
+// counts for every shop; with no shop at all, every purchase counts. entries: oldest first, as
+// in itemHistory().
+export function storeTrend(entries, store) {
+  const shop = store ?? (entries.at(-1)?.store || '');
+  const list = entries.filter((e) => !shop || !e.store || sameStore(e.store, shop));
+  const first = list[0], last = list.at(-1);
+  const change = list.length > 1 && first.price ? Math.round(((last.price - first.price) / first.price) * 1000) / 10 : null;
+  return { store: shop, entries: list, first, last, change };
 }
 
 export function toCents(input) {

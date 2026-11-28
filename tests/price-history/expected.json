@@ -1,0 +1,2496 @@
+{
+ "trends": {
+  "milk": "stable",
+  "bread": "up",
+  "butter": "up",
+  "eggs": "up",
+  "coffee": "up",
+  "choco": "up",
+  "olive": "up",
+  "sunoil": "down",
+  "sugar": "down",
+  "pasta": "stable, one sale week",
+  "rice": "stable",
+  "yogurt": "up",
+  "cheese": "up",
+  "chicken": "up (per kg)",
+  "banana": "down (per kg)",
+  "tomato": "up in autumn (per kg)",
+  "apples": "stable (per kg)",
+  "cola": "stable",
+  "tp": "up",
+  "water": "up"
+ },
+ "receipts": [
+  {
+   "week": 0,
+   "date": "2026-05-30",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "apples",
+     "name": "JABOLKA ZLATI DELIŠES",
+     "qty": 0.964,
+     "unit": "kg",
+     "unitPrice": 179,
+     "price": 173
+    },
+    {
+     "key": "butter",
+     "name": "MASLO ZELENE DOLINE 250G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 249,
+     "price": 249
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 0.571,
+     "unit": "kg",
+     "unitPrice": 149,
+     "price": 85
+    },
+    {
+     "key": "sunoil",
+     "name": "SONČNIČNO OLJE 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 229,
+     "price": 229
+    },
+    {
+     "key": "coffee",
+     "name": "KAVA BARCAFFE 400G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 549,
+     "price": 549
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 2,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 118
+    },
+    {
+     "key": "rice",
+     "name": "RIŽ BASMATI 1KG",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 299,
+     "price": 299
+    },
+    {
+     "key": "cola",
+     "name": "COCA-COLA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 189,
+     "price": 189
+    },
+    {
+     "key": "eggs",
+     "name": "JAJCA M 10 KOM",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 289,
+     "price": 289
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "tomato",
+     "name": "PARADIŽNIK",
+     "qty": 0.777,
+     "unit": "kg",
+     "unitPrice": 199,
+     "price": 155
+    },
+    {
+     "key": "cheese",
+     "name": "SIR GAVDA 400G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 499,
+     "price": 499
+    }
+   ],
+   "discount": 0,
+   "total": 3102,
+   "file": "week-00.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 01-6305-29\n30.05.2026 14:41\n------------------------------------\nALPSKO MLEKO 3,5% 1L               1,19 C\nJABOLKA ZLATI DELIŠES\n  0,964 kg x 1,79                  1,73 C\nMASLO ZELENE DOLINE 250G           2,49 C\nBANANE\n  0,571 kg x 1,49                  0,85 C\nSONČNIČNO OLJE 1L                  2,29 C\nKAVA BARCAFFE 400G                 5,49 C\nJOGURT NAVADNI 180G\n  2 x 0,59                         1,18 C\nRIŽ BASMATI 1KG                    2,99 C\nCOCA-COLA 1,5L                     1,89 C\nJAJCA M 10 KOM                     2,89 C\nKRUH BELI 500G                     1,49 C\nPARADIŽNIK\n  0,777 kg x 1,99                  1,55 C\nSIR GAVDA 400G                     4,99 C\n------------------------------------\nSKUPAJ EUR                          31,02\nPlačilna kartica                    31,02\nDDV 9,5%                             2,69\nZOI: 120c5c7fd0\nEOR: d23f-892f-1818\nHvala za nakup!"
+  },
+  {
+   "week": 1,
+   "date": "2026-06-06",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "chicken",
+     "name": "PIŠČANČJE PRSI",
+     "qty": 0.695,
+     "unit": "kg",
+     "unitPrice": 1005,
+     "price": 698
+    },
+    {
+     "key": "water",
+     "name": "RADENSKA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 59
+    },
+    {
+     "key": "pasta",
+     "name": "TESTENINE BARILLA 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 169,
+     "price": 169
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 0.452,
+     "unit": "kg",
+     "unitPrice": 148,
+     "price": 67
+    },
+    {
+     "key": "choco",
+     "name": "ČOKOLADA MILKA 100G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 129,
+     "price": 129
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    }
+   ],
+   "discount": 0,
+   "total": 1489,
+   "file": "week-01.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 02-6488-78\n06.06.2026 14:21\n------------------------------------\nPIŠČANČJE PRSI\n  0,695 kg x 10,05                 6,98 C\nRADENSKA 1,5L                      0,99 C\nJOGURT NAVADNI 180G                0,59 C\nTESTENINE BARILLA 500G             1,69 C\nBANANE\n  0,452 kg x 1,48                  0,67 C\nČOKOLADA MILKA 100G                1,29 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nKRUH BELI 500G                     1,49 C\n------------------------------------\nSKUPAJ EUR                          14,89\nPlačilna kartica                    14,89\nDDV 9,5%                             1,29\nZOI: a66737db90\nEOR: 10c1-f613-1f8f\nHvala za nakup!"
+  },
+  {
+   "week": 2,
+   "date": "2026-06-13",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "apples",
+     "name": "JABOLKA ZLATI DELIŠES",
+     "qty": 0.665,
+     "unit": "kg",
+     "unitPrice": 179,
+     "price": 119
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "tp",
+     "name": "TOALETNI PAPIR 10/1",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 399,
+     "price": 399
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "cola",
+     "name": "COCA-COLA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 189,
+     "price": 189
+    },
+    {
+     "key": "eggs",
+     "name": "JAJCA M 10 KOM",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 289,
+     "price": 289
+    },
+    {
+     "key": "butter",
+     "name": "MASLO ZELENE DOLINE 250G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 255,
+     "price": 255
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 1.145,
+     "unit": "kg",
+     "unitPrice": 147,
+     "price": 168
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 59
+    },
+    {
+     "key": "tomato",
+     "name": "PARADIŽNIK",
+     "qty": 0.771,
+     "unit": "kg",
+     "unitPrice": 199,
+     "price": 153
+    }
+   ],
+   "discount": 0,
+   "total": 1899,
+   "file": "week-02.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 03-4646-91\n13.06.2026 11:56\n------------------------------------\nJABOLKA ZLATI DELIŠES\n  0,665 kg x 1,79                  1,19 C\nKRUH BELI 500G                     1,49 C\nTOALETNI PAPIR 10/1                3,99 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nCOCA-COLA 1,5L                     1,89 C\nJAJCA M 10 KOM                     2,89 C\nMASLO ZELENE DOLINE 250G           2,55 C\nBANANE\n  1,145 kg x 1,47                  1,68 C\nJOGURT NAVADNI 180G                0,59 C\nPARADIŽNIK\n  0,771 kg x 1,99                  1,53 C\n------------------------------------\nSKUPAJ EUR                          18,99\nPlačilna kartica                    18,99\nDDV 9,5%                             1,65\nZOI: 1c441a6adf\nEOR: 0921-8287-22d0\nHvala za nakup!"
+  },
+  {
+   "week": 3,
+   "date": "2026-06-20",
+   "store": "Lidl",
+   "items": [
+    {
+     "key": "sugar",
+     "name": "Sladkor bel 1kg",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 85,
+     "price": 85
+    },
+    {
+     "key": "choco",
+     "name": "Čokolada milka 100g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 129,
+     "price": 129
+    },
+    {
+     "key": "bread",
+     "name": "Kruh beli 500g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "cheese",
+     "name": "Sir gavda 400g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 495,
+     "price": 495
+    },
+    {
+     "key": "water",
+     "name": "Radenska 1,5l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    },
+    {
+     "key": "sunoil",
+     "name": "Sončnično olje vita d'or 1l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 194,
+     "price": 194
+    },
+    {
+     "key": "milk",
+     "name": "Mleko pilos 3,5% 1l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    },
+    {
+     "key": "chicken",
+     "name": "Piščančje prsi",
+     "qty": 0.541,
+     "unit": "kg",
+     "unitPrice": 1007,
+     "price": 545
+    },
+    {
+     "key": "coffee",
+     "name": "Kava barcaffe 400g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 557,
+     "price": 557
+    },
+    {
+     "key": "pasta",
+     "name": "Testenine combino 500g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 89,
+     "price": 89
+    },
+    {
+     "key": "banana",
+     "name": "Banane",
+     "qty": 1.02,
+     "unit": "kg",
+     "unitPrice": 147,
+     "price": 150
+    },
+    {
+     "key": "olive",
+     "name": "Oljčno olje 0,75l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 907,
+     "price": 907
+    },
+    {
+     "key": "yogurt",
+     "name": "Jogurt navadni 180g",
+     "qty": 2,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 118
+    }
+   ],
+   "discount": 0,
+   "total": 3616,
+   "file": "week-03.jpg",
+   "text": "LIDL Slovenija d.o.o. k.d.\nTrgovina Ljubljana Rudnik\nJurčkova cesta 225\nID za DDV: SI59314923\nRačun št.: 04-8186-37\n20.06.2026 17:10\n------------------------------------\nSladkor bel 1kg                    0,85 C\nČokolada milka 100g                1,29 C\nKruh beli 500g                     1,49 C\nSir gavda 400g                     4,95 C\nRadenska 1,5l                      0,99 C\nSončnično olje vita d'or 1l        1,94 C\nMleko pilos 3,5% 1l                0,99 C\nPiščančje prsi\n  0,541 kg x 10,07                 5,45 C\nKava barcaffe 400g                 5,57 C\nTestenine combino 500g             0,89 C\nBanane\n  1,020 kg x 1,47                  1,50 C\nOljčno olje 0,75l                  9,07 C\nJogurt navadni 180g\n  2 x 0,59                         1,18 C\n------------------------------------\nSKUPAJ EUR                          36,16\nPlačilna kartica                    36,16\nDDV 9,5%                             3,14\nZOI: 319662fe1e\nEOR: 71ae-21b6-e05c\nHvala za nakup!"
+  },
+  {
+   "week": 4,
+   "date": "2026-06-27",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "butter",
+     "name": "MASLO ZELENE DOLINE 250G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 260,
+     "price": 260
+    },
+    {
+     "key": "cola",
+     "name": "COCA-COLA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 189,
+     "price": 189
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 0.542,
+     "unit": "kg",
+     "unitPrice": 146,
+     "price": 79
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 59
+    },
+    {
+     "key": "rice",
+     "name": "RIŽ BASMATI 1KG",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 299,
+     "price": 299
+    },
+    {
+     "key": "eggs",
+     "name": "JAJCA M 10 KOM",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 289,
+     "price": 289
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "tomato",
+     "name": "PARADIŽNIK",
+     "qty": 0.858,
+     "unit": "kg",
+     "unitPrice": 199,
+     "price": 171
+    },
+    {
+     "key": "apples",
+     "name": "JABOLKA ZLATI DELIŠES",
+     "qty": 1.049,
+     "unit": "kg",
+     "unitPrice": 179,
+     "price": 188
+    }
+   ],
+   "discount": 0,
+   "total": 1802,
+   "file": "week-04.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 05-1343-39\n27.06.2026 15:41\n------------------------------------\nALPSKO MLEKO 3,5% 1L               1,19 C\nMASLO ZELENE DOLINE 250G           2,60 C\nCOCA-COLA 1,5L                     1,89 C\nBANANE\n  0,542 kg x 1,46                  0,79 C\nJOGURT NAVADNI 180G                0,59 C\nRIŽ BASMATI 1KG                    2,99 C\nJAJCA M 10 KOM                     2,89 C\nKRUH BELI 500G                     1,49 C\nPARADIŽNIK\n  0,858 kg x 1,99                  1,71 C\nJABOLKA ZLATI DELIŠES\n  1,049 kg x 1,79                  1,88 C\n------------------------------------\nSKUPAJ EUR                          18,02\nPlačilna kartica                    18,02\nDDV 9,5%                             1,56\nZOI: 019d2736f7\nEOR: 7efe-d32c-2a1e\nHvala za nakup!"
+  },
+  {
+   "week": 5,
+   "date": "2026-07-04",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "pasta",
+     "name": "TESTENINE BARILLA 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 169,
+     "price": 169
+    },
+    {
+     "key": "choco",
+     "name": "ČOKOLADA MILKA 100G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 129,
+     "price": 129
+    },
+    {
+     "key": "chicken",
+     "name": "PIŠČANČJE PRSI",
+     "qty": 1.314,
+     "unit": "kg",
+     "unitPrice": 1029,
+     "price": 1352
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 0.88,
+     "unit": "kg",
+     "unitPrice": 145,
+     "price": 128
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 59
+    },
+    {
+     "key": "water",
+     "name": "RADENSKA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    }
+   ],
+   "discount": -30,
+   "total": 2174,
+   "file": "week-05.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 06-1299-43\n04.07.2026 12:10\n------------------------------------\nTESTENINE BARILLA 500G             1,69 C\nČOKOLADA MILKA 100G                1,29 C\nPopust                              -0,30\nPIŠČANČJE PRSI\n  1,314 kg x 10,29                13,52 C\nKRUH BELI 500G                     1,49 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nBANANE\n  0,880 kg x 1,45                  1,28 C\nJOGURT NAVADNI 180G                0,59 C\nRADENSKA 1,5L                      0,99 C\n------------------------------------\nSKUPAJ EUR                          21,74\nPlačilna kartica                    21,74\nDDV 9,5%                             1,89\nZOI: d86655165e\nEOR: b342-bb03-b265\nHvala za nakup!"
+  },
+  {
+   "week": 6,
+   "date": "2026-07-11",
+   "store": "Hofer",
+   "items": [
+    {
+     "key": "coffee",
+     "name": "KAVA BARCAFFE 400G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 575,
+     "price": 575
+    },
+    {
+     "key": "sunoil",
+     "name": "SONČNIČNO OLJE 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 207,
+     "price": 207
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 1.171,
+     "unit": "kg",
+     "unitPrice": 144,
+     "price": 169
+    },
+    {
+     "key": "apples",
+     "name": "JABOLKA ZLATI DELIŠES",
+     "qty": 1.136,
+     "unit": "kg",
+     "unitPrice": 169,
+     "price": 192
+    },
+    {
+     "key": "milk",
+     "name": "MLEKO MILSANI 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    },
+    {
+     "key": "tp",
+     "name": "TOAL. PAPIR KOKETT 10/1",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 339,
+     "price": 339
+    },
+    {
+     "key": "eggs",
+     "name": "JAJCA M 10 KOM",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 279,
+     "price": 279
+    },
+    {
+     "key": "butter",
+     "name": "MASLO MILSANI 250G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 233,
+     "price": 233
+    },
+    {
+     "key": "cheese",
+     "name": "SIR GAVDA 400G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 501,
+     "price": 501
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 2,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 118
+    },
+    {
+     "key": "tomato",
+     "name": "PARADIŽNIK",
+     "qty": 0.985,
+     "unit": "kg",
+     "unitPrice": 189,
+     "price": 186
+    },
+    {
+     "key": "cola",
+     "name": "COCA-COLA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 179,
+     "price": 179
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    }
+   ],
+   "discount": 0,
+   "total": 3226,
+   "file": "week-06.jpg",
+   "text": "HOFER trgovina d.o.o.\nPE Ljubljana Moste\nZaloška cesta 151\nID za DDV: SI72278854\nRačun št.: 07-9893-49\n11.07.2026 11:54\n------------------------------------\nKAVA BARCAFFE 400G                 5,75 C\nSONČNIČNO OLJE 1L                  2,07 C\nBANANE\n  1,171 kg x 1,44                  1,69 C\nJABOLKA ZLATI DELIŠES\n  1,136 kg x 1,69                  1,92 C\nMLEKO MILSANI 3,5% 1L              0,99 C\nTOAL. PAPIR KOKETT 10/1            3,39 C\nJAJCA M 10 KOM                     2,79 C\nMASLO MILSANI 250G                 2,33 C\nSIR GAVDA 400G                     5,01 C\nJOGURT NAVADNI 180G\n  2 x 0,59                         1,18 C\nPARADIŽNIK\n  0,985 kg x 1,89                  1,86 C\nCOCA-COLA 1,5L                     1,79 C\nKRUH BELI 500G                     1,49 C\n------------------------------------\nSKUPAJ EUR                          32,26\nPlačilna kartica                    32,26\nDDV 9,5%                             2,80\nZOI: ffefbcbe23\nEOR: a404-38fa-c708\nHvala za nakup!"
+  },
+  {
+   "week": 7,
+   "date": "2026-07-18",
+   "store": "Tus",
+   "items": [
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "chicken",
+     "name": "PIŠČANČJE PRSI",
+     "qty": 1.181,
+     "unit": "kg",
+     "unitPrice": 1036,
+     "price": 1224
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "olive",
+     "name": "OLJČNO OLJE 0,75L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 936,
+     "price": 936
+    },
+    {
+     "key": "water",
+     "name": "RADENSKA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    },
+    {
+     "key": "choco",
+     "name": "ČOKOLADA MILKA 100G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 129,
+     "price": 129
+    },
+    {
+     "key": "pasta",
+     "name": "TESTENINE BARILLA 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 164,
+     "price": 164
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 59
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 1.008,
+     "unit": "kg",
+     "unitPrice": 143,
+     "price": 144
+    },
+    {
+     "key": "sugar",
+     "name": "SLADKOR 1KG",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 109,
+     "price": 109
+    }
+   ],
+   "discount": 0,
+   "total": 3132,
+   "file": "week-07.jpg",
+   "text": "ENGROTUS d.o.o.\nSupermarket Tuš Bežigrad\nLinhartova 11, Ljubljana\nID za DDV: SI54888492\nRačun št.: 08-6650-57\n18.07.2026 09:09\n------------------------------------\nALPSKO MLEKO 3,5% 1L               1,19 C\nPIŠČANČJE PRSI\n  1,181 kg x 10,36                12,24 C\nKRUH BELI 500G                     1,49 C\nOLJČNO OLJE 0,75L                  9,36 C\nRADENSKA 1,5L                      0,99 C\nČOKOLADA MILKA 100G                1,29 C\nTESTENINE BARILLA 500G             1,64 C\nJOGURT NAVADNI 180G                0,59 C\nBANANE\n  1,008 kg x 1,43                  1,44 C\nSLADKOR 1KG                        1,09 C\n------------------------------------\nSKUPAJ EUR                          31,32\nPlačilna kartica                    31,32\nDDV 9,5%                             2,72\nZOI: 034051fd2c\nEOR: d618-ee5e-8460\nHvala za nakup!"
+  },
+  {
+   "week": 8,
+   "date": "2026-07-25",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "tomato",
+     "name": "PARADIŽNIK",
+     "qty": 0.751,
+     "unit": "kg",
+     "unitPrice": 199,
+     "price": 149
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 0.657,
+     "unit": "kg",
+     "unitPrice": 143,
+     "price": 94
+    },
+    {
+     "key": "butter",
+     "name": "MASLO ZELENE DOLINE 250G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 271,
+     "price": 271
+    },
+    {
+     "key": "eggs",
+     "name": "JAJCA M 10 KOM",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 309,
+     "price": 309
+    },
+    {
+     "key": "cola",
+     "name": "COCA-COLA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 189,
+     "price": 189
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 59
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "apples",
+     "name": "JABOLKA ZLATI DELIŠES",
+     "qty": 1.301,
+     "unit": "kg",
+     "unitPrice": 179,
+     "price": 233
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "rice",
+     "name": "RIŽ BASMATI 1KG",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 299,
+     "price": 299
+    }
+   ],
+   "discount": 0,
+   "total": 1871,
+   "file": "week-08.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 09-4592-60\n25.07.2026 19:51\n------------------------------------\nPARADIŽNIK\n  0,751 kg x 1,99                  1,49 C\nBANANE\n  0,657 kg x 1,43                  0,94 C\nMASLO ZELENE DOLINE 250G           2,71 C\nJAJCA M 10 KOM                     3,09 C\nCOCA-COLA 1,5L                     1,89 C\nJOGURT NAVADNI 180G                0,59 C\nKRUH BELI 500G                     1,49 C\nJABOLKA ZLATI DELIŠES\n  1,301 kg x 1,79                  2,33 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nRIŽ BASMATI 1KG                    2,99 C\n------------------------------------\nSKUPAJ EUR                          18,71\nPlačilna kartica                    18,71\nDDV 9,5%                             1,62\nZOI: 0a23d497c7\nEOR: d4b7-fb8b-cb62\nHvala za nakup!"
+  },
+  {
+   "week": 9,
+   "date": "2026-08-01",
+   "store": "Lidl",
+   "items": [
+    {
+     "key": "pasta",
+     "name": "Testenine combino 500g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 89,
+     "price": 89
+    },
+    {
+     "key": "coffee",
+     "name": "Kava barcaffe 400g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 593,
+     "price": 593
+    },
+    {
+     "key": "bread",
+     "name": "Kruh beli 500g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "milk",
+     "name": "Mleko pilos 3,5% 1l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    },
+    {
+     "key": "water",
+     "name": "Radenska 1,5l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    },
+    {
+     "key": "choco",
+     "name": "Čokolada milka 100g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 129,
+     "price": 129
+    },
+    {
+     "key": "yogurt",
+     "name": "Jogurt navadni 180g",
+     "qty": 2,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 118
+    },
+    {
+     "key": "chicken",
+     "name": "Piščančje prsi",
+     "qty": 0.818,
+     "unit": "kg",
+     "unitPrice": 1043,
+     "price": 853
+    },
+    {
+     "key": "banana",
+     "name": "Banane",
+     "qty": 0.654,
+     "unit": "kg",
+     "unitPrice": 142,
+     "price": 93
+    },
+    {
+     "key": "cheese",
+     "name": "Sir gavda 400g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 507,
+     "price": 507
+    },
+    {
+     "key": "sunoil",
+     "name": "Sončnično olje vita d'or 1l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 185,
+     "price": 185
+    }
+   ],
+   "discount": 0,
+   "total": 2914,
+   "file": "week-09.jpg",
+   "text": "LIDL Slovenija d.o.o. k.d.\nTrgovina Ljubljana Rudnik\nJurčkova cesta 225\nID za DDV: SI59314923\nRačun št.: 10-7692-96\n01.08.2026 08:48\n------------------------------------\nTestenine combino 500g             0,89 C\nKava barcaffe 400g                 5,93 C\nKruh beli 500g                     1,49 C\nMleko pilos 3,5% 1l                0,99 C\nRadenska 1,5l                      0,99 C\nČokolada milka 100g                1,29 C\nJogurt navadni 180g\n  2 x 0,59                         1,18 C\nPiščančje prsi\n  0,818 kg x 10,43                 8,53 C\nBanane\n  0,654 kg x 1,42                  0,93 C\nSir gavda 400g                     5,07 C\nSončnično olje vita d'or 1l        1,85 C\n------------------------------------\nSKUPAJ EUR                          29,14\nPlačilna kartica                    29,14\nDDV 9,5%                             2,53\nZOI: a455bb7b5f\nEOR: 83f5-2856-4548\nHvala za nakup!"
+  },
+  {
+   "week": 10,
+   "date": "2026-08-08",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "butter",
+     "name": "MASLO ZELENE DOLINE 250G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 277,
+     "price": 277
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 0.918,
+     "unit": "kg",
+     "unitPrice": 141,
+     "price": 129
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "tp",
+     "name": "TOALETNI PAPIR 10/1",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 399,
+     "price": 399
+    },
+    {
+     "key": "tomato",
+     "name": "PARADIŽNIK",
+     "qty": 1.281,
+     "unit": "kg",
+     "unitPrice": 217,
+     "price": 278
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "eggs",
+     "name": "JAJCA M 10 KOM",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 309,
+     "price": 309
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 59
+    },
+    {
+     "key": "cola",
+     "name": "COCA-COLA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 189,
+     "price": 189
+    },
+    {
+     "key": "apples",
+     "name": "JABOLKA ZLATI DELIŠES",
+     "qty": 0.55,
+     "unit": "kg",
+     "unitPrice": 179,
+     "price": 98
+    }
+   ],
+   "discount": 0,
+   "total": 2006,
+   "file": "week-10.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 11-6215-84\n08.08.2026 10:51\n------------------------------------\nMASLO ZELENE DOLINE 250G           2,77 C\nBANANE\n  0,918 kg x 1,41                  1,29 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nTOALETNI PAPIR 10/1                3,99 C\nPARADIŽNIK\n  1,281 kg x 2,17                  2,78 C\nKRUH BELI 500G                     1,49 C\nJAJCA M 10 KOM                     3,09 C\nJOGURT NAVADNI 180G                0,59 C\nCOCA-COLA 1,5L                     1,89 C\nJABOLKA ZLATI DELIŠES\n  0,550 kg x 1,79                  0,98 C\n------------------------------------\nSKUPAJ EUR                          20,06\nPlačilna kartica                    20,06\nDDV 9,5%                             1,74\nZOI: 25869560b9\nEOR: 5934-d83c-499d\nHvala za nakup!"
+  },
+  {
+   "week": 11,
+   "date": "2026-08-15",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "choco",
+     "name": "ČOKOLADA MILKA 100G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "chicken",
+     "name": "PIŠČANČJE PRSI",
+     "qty": 0.96,
+     "unit": "kg",
+     "unitPrice": 1065,
+     "price": 1022
+    },
+    {
+     "key": "pasta",
+     "name": "TESTENINE BARILLA 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 169,
+     "price": 169
+    },
+    {
+     "key": "sugar",
+     "name": "SLADKOR 1KG",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 0.829,
+     "unit": "kg",
+     "unitPrice": 140,
+     "price": 116
+    },
+    {
+     "key": "water",
+     "name": "RADENSKA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 59
+    },
+    {
+     "key": "olive",
+     "name": "OLJČNO OLJE 0,75L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 965,
+     "price": 965
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    }
+   ],
+   "discount": 0,
+   "total": 2946,
+   "file": "week-11.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 12-9924-51\n15.08.2026 09:27\n------------------------------------\nČOKOLADA MILKA 100G                1,49 C\nPIŠČANČJE PRSI\n  0,960 kg x 10,65                10,22 C\nTESTENINE BARILLA 500G             1,69 C\nSLADKOR 1KG                        0,99 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nBANANE\n  0,829 kg x 1,40                  1,16 C\nRADENSKA 1,5L                      0,99 C\nJOGURT NAVADNI 180G                0,59 C\nOLJČNO OLJE 0,75L                  9,65 C\nKRUH BELI 500G                     1,49 C\n------------------------------------\nSKUPAJ EUR                          29,46\nPlačilna kartica                    29,46\nDDV 9,5%                             2,56\nZOI: 6423496bdc\nEOR: fd81-3e8c-9c84\nHvala za nakup!"
+  },
+  {
+   "week": 12,
+   "date": "2026-08-22",
+   "store": "Spar",
+   "items": [
+    {
+     "key": "cheese",
+     "name": "SIR GAVDA 400G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 533,
+     "price": 533
+    },
+    {
+     "key": "apples",
+     "name": "JABOLKA ZLATI DELIŠES",
+     "qty": 1.306,
+     "unit": "kg",
+     "unitPrice": 189,
+     "price": 247
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 2,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 118
+    },
+    {
+     "key": "sunoil",
+     "name": "SONČNIČNO OLJE 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 215,
+     "price": 215
+    },
+    {
+     "key": "butter",
+     "name": "MASLO ZELENE DOLINE 250G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 293,
+     "price": 293
+    },
+    {
+     "key": "coffee",
+     "name": "KAVA BARCAFFE 400G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 631,
+     "price": 631
+    },
+    {
+     "key": "rice",
+     "name": "RIŽ BASMATI 1KG",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 309,
+     "price": 309
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "cola",
+     "name": "COCA-COLA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 199,
+     "price": 199
+    },
+    {
+     "key": "tomato",
+     "name": "PARADIŽNIK",
+     "qty": 1.009,
+     "unit": "kg",
+     "unitPrice": 244,
+     "price": 246
+    },
+    {
+     "key": "eggs",
+     "name": "JAJCA M 10 KOM",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 319,
+     "price": 319
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 1.044,
+     "unit": "kg",
+     "unitPrice": 139,
+     "price": 145
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 189,
+     "price": 189
+    }
+   ],
+   "discount": 0,
+   "total": 3563,
+   "file": "week-12.jpg",
+   "text": "SPAR SLOVENIJA d.o.o.\nINTERSPAR Vič\nTržaška cesta 33, Ljubljana\nID za DDV: SI32562985\nRačun št.: 13-2622-30\n22.08.2026 11:16\n------------------------------------\nSIR GAVDA 400G                     5,33 C\nJABOLKA ZLATI DELIŠES\n  1,306 kg x 1,89                  2,47 C\nJOGURT NAVADNI 180G\n  2 x 0,59                         1,18 C\nSONČNIČNO OLJE 1L                  2,15 C\nMASLO ZELENE DOLINE 250G           2,93 C\nKAVA BARCAFFE 400G                 6,31 C\nRIŽ BASMATI 1KG                    3,09 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nCOCA-COLA 1,5L                     1,99 C\nPARADIŽNIK\n  1,009 kg x 2,44                  2,46 C\nJAJCA M 10 KOM                     3,19 C\nBANANE\n  1,044 kg x 1,39                  1,45 C\nKRUH BELI 500G                     1,89 C\n------------------------------------\nSKUPAJ EUR                          35,63\nPlačilna kartica                    35,63\nDDV 9,5%                             3,09\nZOI: 4758a6c2c3\nEOR: 07d2-e497-2890\nHvala za nakup!"
+  },
+  {
+   "week": 13,
+   "date": "2026-08-29",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "choco",
+     "name": "ČOKOLADA MILKA 100G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "pasta",
+     "name": "TESTENINE BARILLA 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 169,
+     "price": 169
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 59,
+     "price": 59
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 179,
+     "price": 179
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 1.13,
+     "unit": "kg",
+     "unitPrice": 139,
+     "price": 157
+    },
+    {
+     "key": "chicken",
+     "name": "PIŠČANČJE PRSI",
+     "qty": 0.77,
+     "unit": "kg",
+     "unitPrice": 1077,
+     "price": 829
+    },
+    {
+     "key": "water",
+     "name": "RADENSKA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    }
+   ],
+   "discount": 0,
+   "total": 1760,
+   "file": "week-13.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 14-5243-97\n29.08.2026 08:38\n------------------------------------\nČOKOLADA MILKA 100G                1,49 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nTESTENINE BARILLA 500G             1,69 C\nJOGURT NAVADNI 180G                0,59 C\nKRUH BELI 500G                     1,79 C\nBANANE\n  1,130 kg x 1,39                  1,57 C\nPIŠČANČJE PRSI\n  0,770 kg x 10,77                 8,29 C\nRADENSKA 1,5L                      0,99 C\n------------------------------------\nSKUPAJ EUR                          17,60\nPlačilna kartica                    17,60\nDDV 9,5%                             1,53\nZOI: f4b55c3bd8\nEOR: 3696-d50e-de15\nHvala za nakup!"
+  },
+  {
+   "week": 14,
+   "date": "2026-09-05",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "tomato",
+     "name": "PARADIŽNIK",
+     "qty": 1.347,
+     "unit": "kg",
+     "unitPrice": 252,
+     "price": 339
+    },
+    {
+     "key": "butter",
+     "name": "MASLO ZELENE DOLINE 250G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 288,
+     "price": 288
+    },
+    {
+     "key": "tp",
+     "name": "TOALETNI PAPIR 10/1",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 449,
+     "price": 449
+    },
+    {
+     "key": "apples",
+     "name": "JABOLKA ZLATI DELIŠES",
+     "qty": 1.159,
+     "unit": "kg",
+     "unitPrice": 179,
+     "price": 207
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 1.062,
+     "unit": "kg",
+     "unitPrice": 138,
+     "price": 147
+    },
+    {
+     "key": "eggs",
+     "name": "JAJCA M 10 KOM",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 309,
+     "price": 309
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 179,
+     "price": 179
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 69,
+     "price": 69
+    },
+    {
+     "key": "cola",
+     "name": "COCA-COLA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 189,
+     "price": 189
+    }
+   ],
+   "discount": 0,
+   "total": 2295,
+   "file": "week-14.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 15-5766-65\n05.09.2026 16:41\n------------------------------------\nALPSKO MLEKO 3,5% 1L               1,19 C\nPARADIŽNIK\n  1,347 kg x 2,52                  3,39 C\nMASLO ZELENE DOLINE 250G           2,88 C\nTOALETNI PAPIR 10/1                4,49 C\nJABOLKA ZLATI DELIŠES\n  1,159 kg x 1,79                  2,07 C\nBANANE\n  1,062 kg x 1,38                  1,47 C\nJAJCA M 10 KOM                     3,09 C\nKRUH BELI 500G                     1,79 C\nJOGURT NAVADNI 180G                0,69 C\nCOCA-COLA 1,5L                     1,89 C\n------------------------------------\nSKUPAJ EUR                          22,95\nPlačilna kartica                    22,95\nDDV 9,5%                             1,99\nZOI: e9fcb7b0d1\nEOR: 28fa-8700-c286\nHvala za nakup!"
+  },
+  {
+   "week": 15,
+   "date": "2026-09-12",
+   "store": "Lidl",
+   "items": [
+    {
+     "key": "sunoil",
+     "name": "Sončnično olje vita d'or 1l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 175,
+     "price": 175
+    },
+    {
+     "key": "banana",
+     "name": "Banane",
+     "qty": 0.871,
+     "unit": "kg",
+     "unitPrice": 137,
+     "price": 119
+    },
+    {
+     "key": "bread",
+     "name": "Kruh beli 500g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 169,
+     "price": 169
+    },
+    {
+     "key": "olive",
+     "name": "Oljčno olje 0,75l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 979,
+     "price": 979
+    },
+    {
+     "key": "chicken",
+     "name": "Piščančje prsi",
+     "qty": 0.969,
+     "unit": "kg",
+     "unitPrice": 1079,
+     "price": 1046
+    },
+    {
+     "key": "cheese",
+     "name": "Sir gavda 400g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 519,
+     "price": 519
+    },
+    {
+     "key": "pasta",
+     "name": "Testenine combino 500g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 89,
+     "price": 89
+    },
+    {
+     "key": "milk",
+     "name": "Mleko pilos 3,5% 1l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    },
+    {
+     "key": "water",
+     "name": "Radenska 1,5l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    },
+    {
+     "key": "choco",
+     "name": "Čokolada milka 100g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "yogurt",
+     "name": "Jogurt navadni 180g",
+     "qty": 2,
+     "unit": "pc",
+     "unitPrice": 69,
+     "price": 138
+    },
+    {
+     "key": "coffee",
+     "name": "Kava barcaffe 400g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 629,
+     "price": 629
+    },
+    {
+     "key": "sugar",
+     "name": "Sladkor bel 1kg",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 85,
+     "price": 85
+    }
+   ],
+   "discount": 0,
+   "total": 4295,
+   "file": "week-15.jpg",
+   "text": "LIDL Slovenija d.o.o. k.d.\nTrgovina Ljubljana Rudnik\nJurčkova cesta 225\nID za DDV: SI59314923\nRačun št.: 16-8616-43\n12.09.2026 19:39\n------------------------------------\nSončnično olje vita d'or 1l        1,75 C\nBanane\n  0,871 kg x 1,37                  1,19 C\nKruh beli 500g                     1,69 C\nOljčno olje 0,75l                  9,79 C\nPiščančje prsi\n  0,969 kg x 10,79                10,46 C\nSir gavda 400g                     5,19 C\nTestenine combino 500g             0,89 C\nMleko pilos 3,5% 1l                0,99 C\nRadenska 1,5l                      0,99 C\nČokolada milka 100g                1,49 C\nJogurt navadni 180g\n  2 x 0,69                         1,38 C\nKava barcaffe 400g                 6,29 C\nSladkor bel 1kg                    0,85 C\n------------------------------------\nSKUPAJ EUR                          42,95\nPlačilna kartica                    42,95\nDDV 9,5%                             3,73\nZOI: 38fb00e080\nEOR: 9e15-8500-7ba1\nHvala za nakup!"
+  },
+  {
+   "week": 16,
+   "date": "2026-09-19",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "rice",
+     "name": "RIŽ BASMATI 1KG",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 299,
+     "price": 299
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 179,
+     "price": 179
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 1.238,
+     "unit": "kg",
+     "unitPrice": 136,
+     "price": 168
+    },
+    {
+     "key": "eggs",
+     "name": "JAJCA M 10 KOM",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 309,
+     "price": 309
+    },
+    {
+     "key": "butter",
+     "name": "MASLO ZELENE DOLINE 250G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 294,
+     "price": 294
+    },
+    {
+     "key": "cola",
+     "name": "COCA-COLA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 189,
+     "price": 189
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 69,
+     "price": 69
+    },
+    {
+     "key": "tomato",
+     "name": "PARADIŽNIK",
+     "qty": 0.476,
+     "unit": "kg",
+     "unitPrice": 270,
+     "price": 129
+    },
+    {
+     "key": "apples",
+     "name": "JABOLKA ZLATI DELIŠES",
+     "qty": 0.476,
+     "unit": "kg",
+     "unitPrice": 179,
+     "price": 85
+    }
+   ],
+   "discount": 0,
+   "total": 1840,
+   "file": "week-16.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 17-7735-23\n19.09.2026 15:33\n------------------------------------\nRIŽ BASMATI 1KG                    2,99 C\nKRUH BELI 500G                     1,79 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nBANANE\n  1,238 kg x 1,36                  1,68 C\nJAJCA M 10 KOM                     3,09 C\nMASLO ZELENE DOLINE 250G           2,94 C\nCOCA-COLA 1,5L                     1,89 C\nJOGURT NAVADNI 180G                0,69 C\nPARADIŽNIK\n  0,476 kg x 2,70                  1,29 C\nJABOLKA ZLATI DELIŠES\n  0,476 kg x 1,79                  0,85 C\n------------------------------------\nSKUPAJ EUR                          18,40\nPlačilna kartica                    18,40\nDDV 9,5%                             1,60\nZOI: 01a603ebd5\nEOR: 6380-cbcd-c383\nHvala za nakup!"
+  },
+  {
+   "week": 17,
+   "date": "2026-09-26",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "water",
+     "name": "RADENSKA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 109,
+     "price": 109
+    },
+    {
+     "key": "pasta",
+     "name": "TESTENINE BARILLA 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 169,
+     "price": 169
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 1.035,
+     "unit": "kg",
+     "unitPrice": 135,
+     "price": 140
+    },
+    {
+     "key": "chicken",
+     "name": "PIŠČANČJE PRSI",
+     "qty": 0.927,
+     "unit": "kg",
+     "unitPrice": 1101,
+     "price": 1021
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 69,
+     "price": 69
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 179,
+     "price": 179
+    },
+    {
+     "key": "choco",
+     "name": "ČOKOLADA MILKA 100G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    }
+   ],
+   "discount": -30,
+   "total": 1925,
+   "file": "week-17.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 18-1705-25\n26.09.2026 17:08\n------------------------------------\nALPSKO MLEKO 3,5% 1L               1,19 C\nRADENSKA 1,5L                      1,09 C\nPopust                              -0,30\nTESTENINE BARILLA 500G             1,69 C\nBANANE\n  1,035 kg x 1,35                  1,40 C\nPIŠČANČJE PRSI\n  0,927 kg x 11,01                10,21 C\nJOGURT NAVADNI 180G                0,69 C\nKRUH BELI 500G                     1,79 C\nČOKOLADA MILKA 100G                1,49 C\n------------------------------------\nSKUPAJ EUR                          19,25\nPlačilna kartica                    19,25\nDDV 9,5%                             1,67\nZOI: e8f74f419a\nEOR: 39fa-4d5e-7f19\nHvala za nakup!"
+  },
+  {
+   "week": 18,
+   "date": "2026-10-03",
+   "store": "Hofer",
+   "items": [
+    {
+     "key": "coffee",
+     "name": "KAVA BARCAFFE 400G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 647,
+     "price": 647
+    },
+    {
+     "key": "eggs",
+     "name": "JAJCA M 10 KOM",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 319,
+     "price": 319
+    },
+    {
+     "key": "butter",
+     "name": "MASLO MILSANI 250G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 262,
+     "price": 262
+    },
+    {
+     "key": "cheese",
+     "name": "SIR GAVDA 400G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 525,
+     "price": 525
+    },
+    {
+     "key": "tomato",
+     "name": "PARADIŽNIK",
+     "qty": 1.062,
+     "unit": "kg",
+     "unitPrice": 277,
+     "price": 294
+    },
+    {
+     "key": "sunoil",
+     "name": "SONČNIČNO OLJE 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 183,
+     "price": 183
+    },
+    {
+     "key": "tp",
+     "name": "TOAL. PAPIR KOKETT 10/1",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 339,
+     "price": 339
+    },
+    {
+     "key": "milk",
+     "name": "MLEKO MILSANI 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 2,
+     "unit": "pc",
+     "unitPrice": 69,
+     "price": 138
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 0.919,
+     "unit": "kg",
+     "unitPrice": 135,
+     "price": 124
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 169,
+     "price": 169
+    },
+    {
+     "key": "cola",
+     "name": "COCA-COLA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 179,
+     "price": 179
+    },
+    {
+     "key": "apples",
+     "name": "JABOLKA ZLATI DELIŠES",
+     "qty": 0.688,
+     "unit": "kg",
+     "unitPrice": 169,
+     "price": 116
+    }
+   ],
+   "discount": 0,
+   "total": 3394,
+   "file": "week-18.jpg",
+   "text": "HOFER trgovina d.o.o.\nPE Ljubljana Moste\nZaloška cesta 151\nID za DDV: SI72278854\nRačun št.: 19-7801-32\n03.10.2026 09:15\n------------------------------------\nKAVA BARCAFFE 400G                 6,47 C\nJAJCA M 10 KOM                     3,19 C\nMASLO MILSANI 250G                 2,62 C\nSIR GAVDA 400G                     5,25 C\nPARADIŽNIK\n  1,062 kg x 2,77                  2,94 C\nSONČNIČNO OLJE 1L                  1,83 C\nTOAL. PAPIR KOKETT 10/1            3,39 C\nMLEKO MILSANI 3,5% 1L              0,99 C\nJOGURT NAVADNI 180G\n  2 x 0,69                         1,38 C\nBANANE\n  0,919 kg x 1,35                  1,24 C\nKRUH BELI 500G                     1,69 C\nCOCA-COLA 1,5L                     1,79 C\nJABOLKA ZLATI DELIŠES\n  0,688 kg x 1,69                  1,16 C\n------------------------------------\nSKUPAJ EUR                          33,94\nPlačilna kartica                    33,94\nDDV 9,5%                             2,94\nZOI: ccb6e9bdeb\nEOR: 10a5-6191-595c\nHvala za nakup!"
+  },
+  {
+   "week": 19,
+   "date": "2026-10-10",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "water",
+     "name": "RADENSKA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 109,
+     "price": 109
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 1.338,
+     "unit": "kg",
+     "unitPrice": 134,
+     "price": 179
+    },
+    {
+     "key": "choco",
+     "name": "ČOKOLADA MILKA 100G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 69,
+     "price": 69
+    },
+    {
+     "key": "sugar",
+     "name": "SLADKOR 1KG",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 89,
+     "price": 89
+    },
+    {
+     "key": "pasta",
+     "name": "TESTENINE BARILLA 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 169,
+     "price": 169
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 179,
+     "price": 179
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "chicken",
+     "name": "PIŠČANČJE PRSI",
+     "qty": 0.912,
+     "unit": "kg",
+     "unitPrice": 1113,
+     "price": 1015
+    },
+    {
+     "key": "olive",
+     "name": "OLJČNO OLJE 0,75L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 1013,
+     "price": 1013
+    }
+   ],
+   "discount": 0,
+   "total": 3090,
+   "file": "week-19.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 20-9889-93\n10.10.2026 12:52\n------------------------------------\nRADENSKA 1,5L                      1,09 C\nBANANE\n  1,338 kg x 1,34                  1,79 C\nČOKOLADA MILKA 100G                1,49 C\nJOGURT NAVADNI 180G                0,69 C\nSLADKOR 1KG                        0,89 C\nTESTENINE BARILLA 500G             1,69 C\nKRUH BELI 500G                     1,79 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nPIŠČANČJE PRSI\n  0,912 kg x 11,13                10,15 C\nOLJČNO OLJE 0,75L                 10,13 C\n------------------------------------\nSKUPAJ EUR                          30,90\nPlačilna kartica                    30,90\nDDV 9,5%                             2,68\nZOI: a83f40fcd6\nEOR: 1cce-5c65-bd8b\nHvala za nakup!"
+  },
+  {
+   "week": 20,
+   "date": "2026-10-17",
+   "store": "Tus",
+   "items": [
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 69,
+     "price": 69
+    },
+    {
+     "key": "cola",
+     "name": "COCA-COLA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 184,
+     "price": 184
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 174,
+     "price": 174
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "apples",
+     "name": "JABOLKA ZLATI DELIŠES",
+     "qty": 1.314,
+     "unit": "kg",
+     "unitPrice": 174,
+     "price": 229
+    },
+    {
+     "key": "tomato",
+     "name": "PARADIŽNIK",
+     "qty": 1.127,
+     "unit": "kg",
+     "unitPrice": 300,
+     "price": 338
+    },
+    {
+     "key": "eggs",
+     "name": "JAJCA M 10 KOM",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 324,
+     "price": 324
+    },
+    {
+     "key": "rice",
+     "name": "RIŽ BASMATI 1KG",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 294,
+     "price": 294
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 0.614,
+     "unit": "kg",
+     "unitPrice": 133,
+     "price": 82
+    },
+    {
+     "key": "butter",
+     "name": "MASLO ZELENE DOLINE 250G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 300,
+     "price": 300
+    }
+   ],
+   "discount": 0,
+   "total": 2113,
+   "file": "week-20.jpg",
+   "text": "ENGROTUS d.o.o.\nSupermarket Tuš Bežigrad\nLinhartova 11, Ljubljana\nID za DDV: SI54888492\nRačun št.: 21-7589-67\n17.10.2026 11:27\n------------------------------------\nJOGURT NAVADNI 180G                0,69 C\nCOCA-COLA 1,5L                     1,84 C\nKRUH BELI 500G                     1,74 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nJABOLKA ZLATI DELIŠES\n  1,314 kg x 1,74                  2,29 C\nPARADIŽNIK\n  1,127 kg x 3,00                  3,38 C\nJAJCA M 10 KOM                     3,24 C\nRIŽ BASMATI 1KG                    2,94 C\nBANANE\n  0,614 kg x 1,33                  0,82 C\nMASLO ZELENE DOLINE 250G           3,00 C\n------------------------------------\nSKUPAJ EUR                          21,13\nPlačilna kartica                    21,13\nDDV 9,5%                             1,83\nZOI: 0320b7a7da\nEOR: 2657-e7ab-1a8c\nHvala za nakup!"
+  },
+  {
+   "week": 21,
+   "date": "2026-10-24",
+   "store": "Lidl",
+   "items": [
+    {
+     "key": "banana",
+     "name": "Banane",
+     "qty": 0.802,
+     "unit": "kg",
+     "unitPrice": 132,
+     "price": 106
+    },
+    {
+     "key": "bread",
+     "name": "Kruh beli 500g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 169,
+     "price": 169
+    },
+    {
+     "key": "milk",
+     "name": "Mleko pilos 3,5% 1l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 99,
+     "price": 99
+    },
+    {
+     "key": "pasta",
+     "name": "Testenine combino 500g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 89,
+     "price": 89
+    },
+    {
+     "key": "water",
+     "name": "Radenska 1,5l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 109,
+     "price": 109
+    },
+    {
+     "key": "choco",
+     "name": "Čokolada milka 100g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 149,
+     "price": 149
+    },
+    {
+     "key": "yogurt",
+     "name": "Jogurt navadni 180g",
+     "qty": 2,
+     "unit": "pc",
+     "unitPrice": 69,
+     "price": 138
+    },
+    {
+     "key": "chicken",
+     "name": "Piščančje prsi",
+     "qty": 0.641,
+     "unit": "kg",
+     "unitPrice": 1115,
+     "price": 715
+    },
+    {
+     "key": "cheese",
+     "name": "Sir gavda 400g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 531,
+     "price": 531
+    },
+    {
+     "key": "sunoil",
+     "name": "Sončnično olje vita d'or 1l",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 165,
+     "price": 165
+    },
+    {
+     "key": "coffee",
+     "name": "Kava barcaffe 400g",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 665,
+     "price": 665
+    }
+   ],
+   "discount": 0,
+   "total": 2935,
+   "file": "week-21.jpg",
+   "text": "LIDL Slovenija d.o.o. k.d.\nTrgovina Ljubljana Rudnik\nJurčkova cesta 225\nID za DDV: SI59314923\nRačun št.: 22-9532-91\n24.10.2026 09:49\n------------------------------------\nBanane\n  0,802 kg x 1,32                  1,06 C\nKruh beli 500g                     1,69 C\nMleko pilos 3,5% 1l                0,99 C\nTestenine combino 500g             0,89 C\nRadenska 1,5l                      1,09 C\nČokolada milka 100g                1,49 C\nJogurt navadni 180g\n  2 x 0,69                         1,38 C\nPiščančje prsi\n  0,641 kg x 11,15                 7,15 C\nSir gavda 400g                     5,31 C\nSončnično olje vita d'or 1l        1,65 C\nKava barcaffe 400g                 6,65 C\n------------------------------------\nSKUPAJ EUR                          29,35\nPlačilna kartica                    29,35\nDDV 9,5%                             2,55\nZOI: 3618279c26\nEOR: 31ee-1b36-8c4d\nHvala za nakup!"
+  },
+  {
+   "week": 22,
+   "date": "2026-10-31",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "eggs",
+     "name": "JAJCA M 10 KOM",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 329,
+     "price": 329
+    },
+    {
+     "key": "butter",
+     "name": "MASLO ZELENE DOLINE 250G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 311,
+     "price": 311
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 0.981,
+     "unit": "kg",
+     "unitPrice": 131,
+     "price": 129
+    },
+    {
+     "key": "apples",
+     "name": "JABOLKA ZLATI DELIŠES",
+     "qty": 0.905,
+     "unit": "kg",
+     "unitPrice": 179,
+     "price": 162
+    },
+    {
+     "key": "tp",
+     "name": "TOALETNI PAPIR 10/1",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 449,
+     "price": 449
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "tomato",
+     "name": "PARADIŽNIK",
+     "qty": 0.943,
+     "unit": "kg",
+     "unitPrice": 323,
+     "price": 305
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 69,
+     "price": 69
+    },
+    {
+     "key": "cola",
+     "name": "COCA-COLA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 189,
+     "price": 189
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 179,
+     "price": 179
+    }
+   ],
+   "discount": 0,
+   "total": 2241,
+   "file": "week-22.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 23-2823-91\n31.10.2026 15:39\n------------------------------------\nJAJCA M 10 KOM                     3,29 C\nMASLO ZELENE DOLINE 250G           3,11 C\nBANANE\n  0,981 kg x 1,31                  1,29 C\nJABOLKA ZLATI DELIŠES\n  0,905 kg x 1,79                  1,62 C\nTOALETNI PAPIR 10/1                4,49 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nPARADIŽNIK\n  0,943 kg x 3,23                  3,05 C\nJOGURT NAVADNI 180G                0,69 C\nCOCA-COLA 1,5L                     1,89 C\nKRUH BELI 500G                     1,79 C\n------------------------------------\nSKUPAJ EUR                          22,41\nPlačilna kartica                    22,41\nDDV 9,5%                             1,94\nZOI: 973cc5e011\nEOR: b03a-ea14-31a7\nHvala za nakup!"
+  },
+  {
+   "week": 23,
+   "date": "2026-11-07",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "sugar",
+     "name": "SLADKOR 1KG",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 89,
+     "price": 89
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 0.915,
+     "unit": "kg",
+     "unitPrice": 131,
+     "price": 120
+    },
+    {
+     "key": "olive",
+     "name": "OLJČNO OLJE 0,75L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 1037,
+     "price": 1037
+    },
+    {
+     "key": "water",
+     "name": "RADENSKA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 109,
+     "price": 109
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 179,
+     "price": 179
+    },
+    {
+     "key": "chicken",
+     "name": "PIŠČANČJE PRSI",
+     "qty": 1.349,
+     "unit": "kg",
+     "unitPrice": 1137,
+     "price": 1534
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "choco",
+     "name": "ČOKOLADA MILKA 100G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 159,
+     "price": 159
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 69,
+     "price": 69
+    },
+    {
+     "key": "pasta",
+     "name": "TESTENINE BARILLA 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 169,
+     "price": 169
+    }
+   ],
+   "discount": 0,
+   "total": 3584,
+   "file": "week-23.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 24-8188-90\n07.11.2026 14:12\n------------------------------------\nSLADKOR 1KG                        0,89 C\nBANANE\n  0,915 kg x 1,31                  1,20 C\nOLJČNO OLJE 0,75L                 10,37 C\nRADENSKA 1,5L                      1,09 C\nKRUH BELI 500G                     1,79 C\nPIŠČANČJE PRSI\n  1,349 kg x 11,37                15,34 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nČOKOLADA MILKA 100G                1,59 C\nJOGURT NAVADNI 180G                0,69 C\nTESTENINE BARILLA 500G             1,69 C\n------------------------------------\nSKUPAJ EUR                          35,84\nPlačilna kartica                    35,84\nDDV 9,5%                             3,11\nZOI: 39c14a1160\nEOR: e692-91e5-86d4\nHvala za nakup!"
+  },
+  {
+   "week": 24,
+   "date": "2026-11-14",
+   "store": "Spar",
+   "items": [
+    {
+     "key": "butter",
+     "name": "MASLO ZELENE DOLINE 250G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 326,
+     "price": 326
+    },
+    {
+     "key": "tomato",
+     "name": "PARADIŽNIK",
+     "qty": 1.085,
+     "unit": "kg",
+     "unitPrice": 350,
+     "price": 380
+    },
+    {
+     "key": "rice",
+     "name": "RIŽ BASMATI 1KG",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 309,
+     "price": 309
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 189,
+     "price": 189
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 2,
+     "unit": "pc",
+     "unitPrice": 69,
+     "price": 138
+    },
+    {
+     "key": "sunoil",
+     "name": "SONČNIČNO OLJE 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 191,
+     "price": 191
+    },
+    {
+     "key": "apples",
+     "name": "JABOLKA ZLATI DELIŠES",
+     "qty": 1.183,
+     "unit": "kg",
+     "unitPrice": 189,
+     "price": 224
+    },
+    {
+     "key": "cola",
+     "name": "COCA-COLA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 199,
+     "price": 199
+    },
+    {
+     "key": "eggs",
+     "name": "JAJCA M 10 KOM",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 339,
+     "price": 339
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 0.562,
+     "unit": "kg",
+     "unitPrice": 130,
+     "price": 73
+    },
+    {
+     "key": "cheese",
+     "name": "SIR GAVDA 400G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 557,
+     "price": 557
+    },
+    {
+     "key": "coffee",
+     "name": "KAVA BARCAFFE 400G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 703,
+     "price": 703
+    }
+   ],
+   "discount": 0,
+   "total": 3747,
+   "file": "week-24.jpg",
+   "text": "SPAR SLOVENIJA d.o.o.\nINTERSPAR Vič\nTržaška cesta 33, Ljubljana\nID za DDV: SI32562985\nRačun št.: 25-5718-62\n14.11.2026 16:01\n------------------------------------\nMASLO ZELENE DOLINE 250G           3,26 C\nPARADIŽNIK\n  1,085 kg x 3,50                  3,80 C\nRIŽ BASMATI 1KG                    3,09 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nKRUH BELI 500G                     1,89 C\nJOGURT NAVADNI 180G\n  2 x 0,69                         1,38 C\nSONČNIČNO OLJE 1L                  1,91 C\nJABOLKA ZLATI DELIŠES\n  1,183 kg x 1,89                  2,24 C\nCOCA-COLA 1,5L                     1,99 C\nJAJCA M 10 KOM                     3,39 C\nBANANE\n  0,562 kg x 1,30                  0,73 C\nSIR GAVDA 400G                     5,57 C\nKAVA BARCAFFE 400G                 7,03 C\n------------------------------------\nSKUPAJ EUR                          37,47\nPlačilna kartica                    37,47\nDDV 9,5%                             3,25\nZOI: b6db7c88e0\nEOR: d9b7-6956-7467\nHvala za nakup!"
+  },
+  {
+   "week": 25,
+   "date": "2026-11-21",
+   "store": "Mercator",
+   "items": [
+    {
+     "key": "pasta",
+     "name": "TESTENINE BARILLA 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 169,
+     "price": 169
+    },
+    {
+     "key": "banana",
+     "name": "BANANE",
+     "qty": 0.625,
+     "unit": "kg",
+     "unitPrice": 129,
+     "price": 81
+    },
+    {
+     "key": "yogurt",
+     "name": "JOGURT NAVADNI 180G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 69,
+     "price": 69
+    },
+    {
+     "key": "water",
+     "name": "RADENSKA 1,5L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 109,
+     "price": 109
+    },
+    {
+     "key": "choco",
+     "name": "ČOKOLADA MILKA 100G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 159,
+     "price": 159
+    },
+    {
+     "key": "milk",
+     "name": "ALPSKO MLEKO 3,5% 1L",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 119,
+     "price": 119
+    },
+    {
+     "key": "chicken",
+     "name": "PIŠČANČJE PRSI",
+     "qty": 0.896,
+     "unit": "kg",
+     "unitPrice": 1149,
+     "price": 1030
+    },
+    {
+     "key": "bread",
+     "name": "KRUH BELI 500G",
+     "qty": 1,
+     "unit": "pc",
+     "unitPrice": 179,
+     "price": 179
+    }
+   ],
+   "discount": 0,
+   "total": 1915,
+   "file": "week-25.jpg",
+   "text": "MERCATOR d.o.o.\nHipermarket Šiška\nDunajska cesta 107, Ljubljana\nID za DDV: SI45884595\nRačun št.: 26-7520-30\n21.11.2026 18:11\n------------------------------------\nTESTENINE BARILLA 500G             1,69 C\nBANANE\n  0,625 kg x 1,29                  0,81 C\nJOGURT NAVADNI 180G                0,69 C\nRADENSKA 1,5L                      1,09 C\nČOKOLADA MILKA 100G                1,59 C\nALPSKO MLEKO 3,5% 1L               1,19 C\nPIŠČANČJE PRSI\n  0,896 kg x 11,49                10,30 C\nKRUH BELI 500G                     1,79 C\n------------------------------------\nSKUPAJ EUR                          19,15\nPlačilna kartica                    19,15\nDDV 9,5%                             1,66\nZOI: f0bed26c9e\nEOR: c50c-258b-e3ac\nHvala za nakup!"
+  }
+ ]
+}

@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:budget/core/models.dart';
 import 'package:budget/core/money.dart';
 import 'package:budget/core/prices.dart';
+import 'package:budget/core/entry_draft.dart';
 import 'package:budget/core/receipt_parser.dart';
 import 'package:budget/core/store.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,15 +18,18 @@ dynamic json(String name) => jsonDecode(fixture(name));
 void main() {
   test('receipt parsing matches the web app on thousands of receipts', () {
     final cases = (json('receipts') as List).cast<Map>();
-    expect(cases.length, greaterThan(1000));
+    expect(cases.length, greaterThan(5000));
+    expect(cases.where((c) => (c['items'] as List).any((i) => (i as Map)['qty'] != null)).length, greaterThan(1000));
     final bad = <String>[];
     for (final c in cases) {
       final text = c['text'] as String;
-      final want = (c['items'] as List).map((i) => ReceiptItem(name: i['name'] as String, price: i['price'] as int)).toList();
+      final want = (c['items'] as List).map((i) => ReceiptItem.fromJson((i as Map).cast<String, dynamic>())).toList();
       final got = ReceiptParser.parse(text);
       if (!_listEq(got, want)) bad.add('ITEMS\n$text\nweb: $want\napp: $got');
       final gotTotal = ReceiptParser.findTotal(text);
       if (gotTotal != c['total']) bad.add('TOTAL\n$text\nweb: ${c['total']} app: $gotTotal');
+      final gotStore = ReceiptParser.findStore(text);
+      if (gotStore != c['store']) bad.add('STORE\n$text\nweb: ${c['store']} app: $gotStore');
     }
     expect(bad.length, 0, reason: bad.take(5).join('\n-----\n'));
   });
@@ -94,6 +98,94 @@ void main() {
       final r = p['result'] as Map?;
       expect(got?.date, r?['date']);
       expect(got?.price, r?['price']);
+    }
+  });
+
+  test('price history per piece / per kilo matches the web app', () {
+    final f = json('quantities') as Map;
+    final raw = jsonEncode(f['data']);
+    final data = BudgetData.decode(raw);
+    expect(jsonDecode(data.encode()), jsonDecode(raw), reason: 'quantities are kept unchanged');
+    final store = BudgetStore(initial: data);
+    final history = store.itemHistory();
+    for (final h in (f['history'] as List).cast<Map>()) {
+      final g = history[h['key']]!;
+      expect(g.entries.map((e) => e.price).toList(), h['prices'], reason: h['key'] as String);
+      expect(g.entries.map((e) => e.unit).toList(), h['units'], reason: h['key'] as String);
+    }
+    for (final p in (f['previous'] as List).cast<Map>()) {
+      final got = store.previousPrice(p['name'] as String, p['before'] as String);
+      final r = p['result'] as Map?;
+      expect(got?.date, r?['date']);
+      expect(got?.price, r?['price']);
+      expect(got?.unit, r?['unit']);
+    }
+  });
+
+  test('the date on a receipt matches the web app', () {
+    final texts = ((json('dates') as Map)['texts'] as List).cast<Map>();
+    expect(texts.length, greaterThan(1000));
+    expect(texts.where((t) => t['date'] == null).length, greaterThan(200));
+    expect(texts.where((t) => t['date'] != null).length, greaterThan(500));
+    final bad = <String>[];
+    for (final t in texts) {
+      final got = ReceiptParser.findDate(t['text'] as String, today: DateTime.parse(t['today'] as String));
+      if (got != t['date']) bad.add('${t['text']}\ntoday ${t['today']} web: ${t['date']} app: $got');
+    }
+    expect(bad.length, 0, reason: bad.take(5).join('\n-----\n'));
+  });
+
+  test('a receipt sets the date, unless it was picked by hand', () {
+    const text = 'MERCATOR d.d.\n21.11.2026 14:05\nMLEKO 1,19\nSKUPAJ EUR 1,19';
+    final today = DateTime(2026, 11, 28);
+    final d = EntryDraft(spaceId: 's', date: '2026-11-28');
+    d.applyReceiptText(text, today: today);
+    expect((d.date, d.dateFromReceipt), ('2026-11-21', '2026-11-21'));
+    final same = EntryDraft(spaceId: 's', date: '2026-11-21')..applyReceiptText(text, today: today);
+    expect((same.date, same.dateFromReceipt), ('2026-11-21', null), reason: 'nothing to say when it is the same day');
+    final byHand = EntryDraft(spaceId: 's', date: '2026-11-20')..dateTouched = true;
+    byHand.applyReceiptText(text, today: today);
+    expect((byHand.date, byHand.dateFromReceipt), ('2026-11-20', null));
+    final old = EntryDraft(spaceId: 's', date: '2026-11-28')..applyReceiptText(text, today: DateTime(2028, 1, 10));
+    expect(old.date, '2026-11-28', reason: 'a date more than a year back is not taken');
+  });
+
+  test('the shop on a receipt, and prices at the same shop, match the web app', () {
+    final f = json('stores') as Map;
+    final texts = (f['texts'] as List).cast<Map>();
+    expect(texts.length, greaterThan(500));
+    expect(texts.where((t) => t['store'] == null).length, greaterThan(50));
+    expect(texts.where((t) => t['store'] == 'Tuš').length, greaterThan(20));
+    final bad = <String>[];
+    for (final t in texts) {
+      final got = ReceiptParser.findStore(t['text'] as String);
+      if (got != t['store']) bad.add('${t['text']}\nweb: ${t['store']} app: $got');
+    }
+    expect(bad.length, 0, reason: bad.take(5).join('\n-----\n'));
+
+    final raw = jsonEncode(f['data']);
+    final data = BudgetData.decode(raw);
+    expect(jsonDecode(data.encode()), jsonDecode(raw), reason: 'shops are kept unchanged');
+    final store = BudgetStore(initial: data);
+    final history = store.itemHistory();
+    expect(history.length, (f['history'] as List).length);
+    for (final h in (f['history'] as List).cast<Map>()) {
+      final g = history[h['key']]!;
+      final k = h['key'] as String;
+      expect(g.entries.map((e) => e.store).toList(), h['stores'], reason: k);
+      for (final (tr, want) in [(g.trend(), h['trend'] as Map), (g.trend('spar'), h['spar'] as Map)]) {
+        expect(tr.store, want['store'], reason: k);
+        expect(tr.entries.map((e) => e.price).toList(), want['prices'], reason: k);
+        expect(tr.change, want['change'], reason: k);
+      }
+    }
+    for (final p in (f['previous'] as List).cast<Map>()) {
+      final got = store.previousPrice(p['name'] as String, p['before'] as String, store: p['store'] as String?);
+      final r = p['result'] as Map?;
+      final why = '${p['name']} before ${p['before']} at ${p['store']}';
+      expect(got?.date, r?['date'], reason: why);
+      expect(got?.price, r?['price'], reason: why);
+      expect(got == null ? null : (got.store.isEmpty ? null : got.store), r?['store'], reason: why);
     }
   });
 }

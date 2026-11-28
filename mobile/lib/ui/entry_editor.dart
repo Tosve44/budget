@@ -6,8 +6,10 @@ import '../core/models.dart';
 import '../core/money.dart';
 import '../core/premium.dart';
 import '../core/prices.dart';
+import '../core/store.dart';
 import 'home.dart';
 import 'premium_screen.dart';
+import 'settings_screen.dart';
 import 'widgets.dart';
 
 /// Add or change an entry. A receipt photo fills in the items and the total.
@@ -26,6 +28,7 @@ class _EntryEditorState extends State<EntryEditor> {
   late final EntryDraft draft;
   final amount = TextEditingController();
   final note = TextEditingController();
+  final shop = TextEditingController();
   final List<(TextEditingController, TextEditingController)> lineFields = [];
   String? problem;
   bool reading = false;
@@ -43,6 +46,7 @@ class _EntryEditorState extends State<EntryEditor> {
     draft = e != null ? EntryDraft.editing(e) : EntryDraft(spaceId: widget.draftSpaceId, kind: widget.kind, date: widget.defaultDate);
     amount.text = draft.amountText;
     note.text = draft.note;
+    shop.text = draft.store;
     _syncLineFields();
     if (isNew) WidgetsBinding.instance.addPostFrameCallback((_) => amountFocus.requestFocus());
   }
@@ -51,6 +55,7 @@ class _EntryEditorState extends State<EntryEditor> {
   void dispose() {
     amount.dispose();
     note.dispose();
+    shop.dispose();
     amountFocus.dispose();
     scroll.dispose();
     for (final (a, b) in lineFields) {
@@ -90,7 +95,12 @@ class _EntryEditorState extends State<EntryEditor> {
       firstDate: DateTime(2000),
       lastDate: DateTime(now.year + 5, 12, 31),
     );
-    if (d != null) setState(() => draft.date = DateKey.day(d));
+    if (d != null) {
+      setState(() {
+        draft.date = DateKey.day(d);
+        draft.dateTouched = true;
+      });
+    }
   }
 
   Future<void> addPhoto({required bool camera}) async {
@@ -109,16 +119,22 @@ class _EntryEditorState extends State<EntryEditor> {
       final text = await model.reader.read(model.photos.file(id)!.path);
       if (!mounted) return;
       _readLines();
-      final n = draft.applyReceiptText(text);
+      final n = draft.applyReceiptText(text, today: model.now());
       amount.text = draft.amountText;
+      shop.text = draft.store;
       _syncLineFields();
       if (draft.categoryId == null) {
         final g = categories().where((c) => c.name == 'Groceries').firstOrNull;
         if (g != null) draft.categoryId = g.id;
       }
+      final mm = draft.mismatch;
       readNote = n == 0
           ? 'No items found. Try a straighter photo with good light, or type them in.'
+          : mm != null
+          ? '⚠️ Found $n item${n == 1 ? '' : 's'}. They add up to ${model.money(mm.$1)}, but the receipt total is ${model.money(mm.$2)}: a price may be misread (or there is a discount). Check the prices.'
           : 'Found $n item${n == 1 ? '' : 's'}. Check them; tap to fix a name or price.';
+      final day = draft.dateFromReceipt;
+      if (day != null) readNote = '$readNote Date from the receipt: ${day.substring(8)}.${day.substring(5, 7)}.${day.substring(0, 4)}.';
     } catch (e) {
       readNote = 'Could not read the text. You can still type the items, and the photo is kept.';
     }
@@ -129,6 +145,7 @@ class _EntryEditorState extends State<EntryEditor> {
   void _readLines() {
     draft.amountText = amount.text;
     draft.note = note.text;
+    draft.store = shop.text;
     for (var i = 0; i < lineFields.length && i < draft.lines.length; i++) {
       draft.lines[i]
         ..name = lineFields[i].$1.text
@@ -178,6 +195,19 @@ class _EntryEditorState extends State<EntryEditor> {
     if (rid != null && !rid.startsWith('cloud:') && !(model.sync?.isConnected ?? false)) model.photos.delete(rid);
     if (id != null) model.store.deleteTransaction(id);
     if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> newCategory() async {
+    final model = ModelScope.read(context);
+    _readLines();
+    // Categories of your own are part of Premium.
+    if (!PlanRules.canAddCustomCategory(model.plan)) return openPremium(context, because: PremiumFeature.categories);
+    final id = await showCategoryEditor(context, spaceId: draft.spaceId, kind: draft.kind, pickExisting: true);
+    if (id == null || !mounted) return;
+    setState(() {
+      draft.categoryId = id;
+      problem = null;
+    });
   }
 
   @override
@@ -246,7 +276,6 @@ class _EntryEditorState extends State<EntryEditor> {
             const SizedBox(height: 4),
             Text('Category', style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 6),
-            if (cats.isEmpty) const Muted('No categories. Add one in Settings.'),
             Wrap(
               key: const Key('categoryChips'),
               spacing: 6,
@@ -263,6 +292,13 @@ class _EntryEditorState extends State<EntryEditor> {
                       problem = null;
                     }),
                   ),
+                // A new category made right here; what was typed so far stays, and it is picked.
+                ActionChip(
+                  key: const Key('chip.new'),
+                  avatar: Icon(PlanRules.canAddCustomCategory(model.plan) ? Icons.add : Icons.lock_outline, size: 18),
+                  label: const Text('New category'),
+                  onPressed: newCategory,
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -344,6 +380,7 @@ class _EntryEditorState extends State<EntryEditor> {
                 padding: const EdgeInsets.only(top: 8),
                 child: Muted(readNote!, key: const Key('readNote')),
               ),
+            if (lineFields.isNotEmpty || draft.receiptId != null || shop.text.isNotEmpty) _shopField(context, store),
             for (var i = 0; i < lineFields.length; i++) _lineRow(context, i, store, pal),
             if (lineFields.isNotEmpty || draft.receiptId != null)
               Wrap(
@@ -392,18 +429,68 @@ class _EntryEditorState extends State<EntryEditor> {
     );
   }
 
+  /// The shop: read from the receipt, or typed / picked. Prices are compared at the same shop.
+  Widget _shopField(BuildContext context, BudgetStore store) {
+    final known = <String>{'Mercator', 'Spar', 'Lidl', 'Hofer', 'Tuš', 'Eurospin', 'Jager'};
+    for (final t in store.data.transactions) {
+      if (t.store.isNotEmpty && !known.any((k) => PriceHistory.sameStore(k, t.store))) known.add(t.store);
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: TextField(
+        key: const Key('shopField'),
+        controller: shop,
+        maxLength: Limits.store,
+        textCapitalization: TextCapitalization.words,
+        decoration: InputDecoration(
+          labelText: 'Shop',
+          hintText: 'Read from the receipt, or type it',
+          counterText: '',
+          isDense: true,
+          border: const OutlineInputBorder(),
+          suffixIcon: PopupMenuButton<String>(
+            key: const Key('shopPick'),
+            tooltip: 'Pick a shop',
+            icon: const Icon(Icons.storefront_outlined),
+            onSelected: (v) => setState(() {
+              shop.text = v;
+              _readLines();
+            }),
+            itemBuilder: (_) => [for (final k in known) PopupMenuItem(value: k, child: Text(k))],
+          ),
+        ),
+        onChanged: (_) => setState(_readLines),
+      ),
+    );
+  }
+
   Widget _lineRow(BuildContext context, int i, dynamic store, Palette pal) {
     final (nameField, priceField) = lineFields[i];
-    final line = DraftLine(name: nameField.text, priceText: priceField.text);
+    final line = DraftLine(name: nameField.text, priceText: priceField.text, read: i < draft.lines.length ? draft.lines[i].read : null);
     final cmp = draft.comparison(line, ModelScope.of(context).store);
-    final money = ModelScope.of(context).money;
-    final (String text, Color color) = switch (cmp?.kind) {
+    final money0 = ModelScope.of(context).money;
+    String money(int c) => '${money0(c)}${cmp?.perKg == true ? '/kg' : ''}';
+    final it = line.item();
+    final q = it?.qty;
+    // "2 × 0,59 €" or "0,856 kg × 1,49 €/kg": what the comparison is about.
+    final amount = it == null || q == null ? '' : (it.unit == 'kg' ? '${q.toString().replaceAll('.', ',')} kg ×' : '${q.round()} ×');
+    final perKg = it?.unit == 'kg' ? '/kg' : '';
+    final qtyText = it == null || q == null || it.perUnit == null ? '' : '$amount ${money0(it.perUnit!)}$perKg · ';
+    // The last price is from another shop when it was never bought at this one.
+    final at = cmp == null || cmp.elsewhere.isEmpty ? '' : ' at ${cmp.elsewhere}';
+    final (String text0, Color color) = switch (cmp?.kind) {
       null => ('', pal.muted),
+      // Quantity × price of one is not the line total: something is misread; say so it can be fixed.
+      'misread' => (
+        '⚠️ $amount ${money0(it!.unitPrice ?? 0)}$perKg is not ${money0(it.price)}. Check this price; until it adds up, this line is left out of the price history.',
+        pal.over,
+      ),
       'new' => ('First time', pal.muted),
-      'same' => ('Same as ${shortDay(cmp!.date)} (${money(cmp.before)})', pal.muted),
-      'up' => ('▲ +${pct(cmp!.percent)}% since ${shortDay(cmp.date)} (was ${money(cmp.before)})', pal.over),
-      _ => ('▼ ${pct(cmp!.percent)}% since ${shortDay(cmp.date)} (was ${money(cmp.before)})', pal.income),
+      'same' => ('Same as ${shortDay(cmp!.date)}$at (${money(cmp.before)})', pal.muted),
+      'up' => ('▲ +${pct(cmp!.percent)}% since ${shortDay(cmp.date)}$at (was ${money(cmp.before)})', pal.over),
+      _ => ('▼ ${pct(cmp!.percent)}% since ${shortDay(cmp.date)}$at (was ${money(cmp.before)})', pal.income),
     };
+    final text = text0.isEmpty ? '' : '$qtyText$text0';
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Column(

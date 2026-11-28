@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Store, toCents, shiftMonth, normalizeItem, createInitialData } from '../store.js';
-import { parseReceipt } from '../receipt.js';
+import { Store, toCents, shiftMonth, normalizeItem, createInitialData, pricePerUnit, cleanItem, storeTrend } from '../store.js';
+import { rowToTx } from '../sync.js';
+import { parseReceipt, findStore, findDate } from '../receipt.js';
 
 class MemStorage { constructor() { this.m = {}; } getItem(k) { return this.m[k] ?? null; } setItem(k, v) { this.m[k] = String(v); } }
 
@@ -157,8 +158,8 @@ test('parses a Mercator-style receipt', () => {
   assert.deepEqual(parseReceipt(MERCATOR), [
     { name: 'MLEKO ALPSKO 3,5% 1L', price: 129 },
     { name: 'KRUH BELI 500G', price: 149 },
-    { name: 'JOGURT NAVADNI 180G', price: 178 },
-    { name: 'BANANE', price: 128 },
+    { name: 'JOGURT NAVADNI 180G', price: 178, qty: 2, unitPrice: 89 },
+    { name: 'BANANE', price: 128, qty: 0.856, unit: 'kg', unitPrice: 149 },
     { name: 'ČOKOLADA MILKA 100G', price: 159 },
   ]);
 });
@@ -178,7 +179,7 @@ test('parses a Lidl-style receipt with the weight line below the item', () => {
     { name: 'Jajca M 10/1', price: 249 },
     { name: 'Maslo 250g', price: 299 },
     { name: 'Testenine špageti', price: 89 },
-    { name: 'Paradižnik', price: 115 },
+    { name: 'Paradižnik', price: 115, qty: 0.62, unit: 'kg', unitPrice: 185 },
   ]);
 });
 
@@ -241,4 +242,164 @@ test('a chosen icon is kept to the database limit and saved with the category', 
   assert.equal(s.category(c.id).icon, '🐶');
   s.updateCategory(c.id, { icon: 'x'.repeat(40) });
   assert.ok(s.category(c.id).icon.length <= 16);
+});
+
+// ---- quantities: price tracking compares the price of one piece / one kilo ----
+test('quantity and weight lines give the price of one piece or one kilo', () => {
+  const items = parseReceipt(`JOGURT NAVADNI 180G
+  2 x 0,59                 1,18 C
+BANANE
+  1,020 kg x 1,47          1,50 C
+PIŠČANČJE PRSI
+  0,612 kg x 10,07         6,16 C
+SKUPAJ                     8,84`);
+  assert.deepEqual(items, [
+    { name: 'JOGURT NAVADNI 180G', price: 118, qty: 2, unitPrice: 59 },
+    { name: 'BANANE', price: 150, qty: 1.02, unit: 'kg', unitPrice: 147 },
+    { name: 'PIŠČANČJE PRSI', price: 616, qty: 0.612, unit: 'kg', unitPrice: 1007 },
+  ]);
+  assert.deepEqual(items.map(pricePerUnit), [59, 147, 1007]);
+});
+
+test('a quantity line that does not add up is left out of the price history until it is fixed', () => {
+  const [it] = parseReceipt('BANANE\n 0,856 kg x 7,49      1,28 C');
+  assert.deepEqual(it, { name: 'BANANE', price: 128, qty: 0.856, unit: 'kg', unitPrice: 749 });
+  assert.equal(pricePerUnit(it), null); // 0,856 × 7,49 is not 1,28: something is misread
+  const s = freshStore();
+  const P = 'sp_personal_tosve', G = catId(s, P, 'Groceries');
+  s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: 1, date: '2026-06-06', items: [it, { name: 'Kruh', price: 149 }] });
+  assert.equal(s.itemHistory().get('banane'), undefined);
+  assert.equal(s.previousPrice('BANANE', '2026-12-01'), null);
+  // The total fixed by hand so it adds up again (6,41): back in the history, per kilo.
+  s.updateTransaction(s.data.transactions[0].id, { items: [{ ...it, price: 641 }] });
+  assert.deepEqual(s.itemHistory().get('banane').entries.map((e) => e.price), [749]);
+  // A quantity read from the wrong line (butter with the apples' weight) stays out too.
+  assert.equal(pricePerUnit({ name: 'MASLO', price: 294, qty: 0.665, unit: 'kg', unitPrice: 179 }), null);
+});
+
+test('a small l read as 1 in volumes is put back', () => {
+  const names = parseReceipt('Mleko pilos 3,5% 11   0,99 C\nRadenska 1,51   0,99 C\nOljčno olje 0,751  9,07 C\nOlje vita d\'or 11  1,94 C\nMASLO 1509   2,49 C').map((i) => i.name);
+  assert.deepEqual(names, ['Mleko pilos 3,5% 1l', 'Radenska 1,5l', 'Oljčno olje 0,75l', 'Olje vita d\'or 1l', 'MASLO 150G']);
+});
+
+test('price history and comparison use the price per piece / per kilo', () => {
+  const s = freshStore();
+  const P = 'sp_personal_tosve', G = catId(s, P, 'Groceries');
+  s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: 1, date: '2026-06-06', items: [{ name: 'BANANE', price: 72, qty: 0.483, unit: 'kg', unitPrice: 149 }, { name: 'Jogurt', price: 59 }] });
+  s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: 1, date: '2026-11-21', items: [{ name: 'Banane', price: 160, qty: 1.24, unit: 'kg', unitPrice: 129 }, { name: 'JOGURT', price: 138, qty: 2, unitPrice: 69 }] });
+  const h = s.itemHistory();
+  assert.deepEqual(h.get('banane').entries.map((e) => [e.price, e.unit]), [[149, 'kg'], [129, 'kg']]);
+  assert.deepEqual(h.get('jogurt').entries.map((e) => e.price), [59, 69]);
+  assert.deepEqual(s.previousPrice('banane', '2026-12-01'), { date: '2026-11-21', price: 129, unit: 'kg' });
+  // Stored as given (line total kept, so the bill still adds up).
+  assert.equal(s.data.transactions.at(-1).items[0].price, 160);
+});
+
+test('bad quantities are dropped instead of spoiling the price history', () => {
+  assert.deepEqual(cleanItem({ name: 'a', price: 100, qty: 0 }), { name: 'a', price: 100 });
+  assert.deepEqual(cleanItem({ name: 'a', price: 100, qty: 'x', unit: 'kg' }), { name: 'a', price: 100 });
+  assert.deepEqual(cleanItem({ name: 'a', price: 100, qty: 1, unit: 'kg' }), { name: 'a', price: 100 });
+  assert.deepEqual(cleanItem({ name: 'a', price: 100, qty: 2, unit: 'lb', unitPrice: 50 }), { name: 'a', price: 100, qty: 2, unitPrice: 50 });
+  // A price of one that doesn't add up is kept (the line is left out of the history, see above).
+  assert.deepEqual(cleanItem({ name: 'a', price: 120, qty: 2, unitPrice: 50 }), { name: 'a', price: 120, qty: 2, unitPrice: 50 });
+  assert.deepEqual(cleanItem({ name: 'a', price: 120, qty: 2, unitPrice: -5 }), { name: 'a', price: 120, qty: 2 });
+  assert.equal(pricePerUnit({ price: 120, qty: 2 }), 60); // no printed price of one: worked out
+});
+
+test('quantities survive the trip through the cloud', () => {
+  const t = rowToTx({ id: 't', space_id: 's', category_id: 'c', kind: 'expense', amount: 150, date: '2026-11-21', items: [{ name: 'BANANE', price: 150, qty: 1.02, unit: 'kg', unitPrice: 147 }, { name: 'MLEKO', price: 119 }], created_at: '2026-11-21T10:00:00Z', updated_at: '2026-11-21T10:00:00Z' });
+  assert.deepEqual(t.items, [{ name: 'BANANE', price: 150, qty: 1.02, unit: 'kg', unitPrice: 147 }, { name: 'MLEKO', price: 119 }]);
+});
+
+// ---- shops ----
+test('the shop is read from the top of the receipt', () => {
+  assert.equal(findStore(MERCATOR), 'Mercator');
+  assert.equal(findStore(LIDL), 'Lidl');
+  assert.equal(findStore('ENGROTUS d.o.o.\nSupermarket Tus Bezigrad'), 'Tuš');
+  assert.equal(findStore('INTERSPAR Vič\nKRUH 1,49'), 'Spar');
+  assert.equal(findStore('HOFER trgovina d.o.o.'), 'Hofer');
+  assert.equal(findStore('MERCAT0R d.o.o.'), 'Mercator'); // 0 read for O
+  // The name at the top wins over a product lower down.
+  assert.equal(findStore('Eurospin Slovenija\nA\nB\nC\nD\nE\nSPAR jogurt  0,59'), 'Eurospin');
+  assert.equal(findStore('Trgovina Kos\nMLEKO 1,19'), null);
+  assert.equal(findStore('Sparkling water 0,99'), null);
+  // Š and other letters count as letters: "TUŠ" is found, "tuševa" (part of a word) is not.
+  assert.equal(findStore('TUŠ d.o.o.'), 'Tuš');
+  assert.equal(findStore('Engrotuš d.o.o., Celje'), 'Tuš');
+  assert.equal(findStore('MÜLLER Ljubljana'), 'Müller');
+  assert.equal(findStore('Trgovina tuševa 3'), null);
+});
+
+test('the shop is kept on an entry, and prices are compared at the same shop', () => {
+  const s = freshStore();
+  const P = 'sp_personal_tosve', G = catId(s, P, 'Groceries');
+  const add = (date, store, price) => s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: price, date, store, items: [{ name: 'MLEKO 1L', price }] });
+  add('2026-06-06', 'Mercator', 119);
+  add('2026-06-13', '  Lidl ', 99);
+  add('2026-11-14', 'Mercator', 129);
+  const t = add('2026-11-21', 'Lidl', 109);
+  assert.equal(s.data.transactions[1].store, 'Lidl', 'trimmed');
+  assert.equal(add('2026-11-22', '   ', 1).store, undefined, 'no empty shop saved');
+  s.deleteTransaction(s.data.transactions.at(-1).id);
+  // Per shop: Lidl 0,99 → 1,09 (+10.1%), not Mercator 1,19 → Lidl 1,09.
+  const g = s.itemHistory().get('mleko 1l');
+  assert.deepEqual(storeTrend(g.entries).store, 'Lidl');
+  assert.equal(storeTrend(g.entries).change, 10.1);
+  assert.equal(storeTrend(g.entries, 'Mercator').change, 8.4);
+  assert.equal(storeTrend(g.entries, 'mercator').entries.length, 2, 'shop names match like item names');
+  // "was ..." on the entry screen: the same shop first, any shop when never bought there.
+  assert.deepEqual(s.previousPrice('Mleko 1L', '2026-11-20', null, 'Mercator'), { date: '2026-11-14', price: 129, store: 'Mercator' });
+  assert.deepEqual(s.previousPrice('Mleko 1L', '2026-11-20', null, 'Lidl'), { date: '2026-06-13', price: 99, store: 'Lidl' });
+  assert.deepEqual(s.previousPrice('Mleko 1L', '2026-11-20', null, 'Spar'), { date: '2026-11-14', price: 129, store: 'Mercator' });
+  s.updateTransaction(t.id, { store: 'Hofer' });
+  assert.equal(s.data.transactions.find((x) => x.id === t.id).store, 'Hofer');
+  // A purchase without a shop (typed by hand, or from before shops were kept) counts for every
+  // shop, so old history still shows a change.
+  const old = [{ date: '2026-05-01', price: 100, store: '' }, { date: '2026-06-01', price: 110, store: 'Spar' }, { date: '2026-07-01', price: 90, store: 'Lidl' }];
+  assert.equal(storeTrend(old).change, -10);
+  assert.equal(storeTrend(old, 'Spar').change, 10);
+  assert.equal(storeTrend([{ price: 100, store: '' }, { price: 120, store: 'Spar' }, { price: 125, store: '' }]).change, 25, 'no shop: every purchase');
+});
+
+test('an item sold by weight: a purchase without its weight is left out of the history', () => {
+  const s = freshStore();
+  const P = 'sp_personal_tosve', G = catId(s, P, 'Groceries');
+  const add = (date, it) => s.addTransaction({ spaceId: P, categoryId: G, kind: 'expense', amount: it.price, date, items: [it] });
+  add('2026-06-06', { name: 'BANANE', price: 155, qty: 1.2, unit: 'kg', unitPrice: 129 });
+  add('2026-06-13', { name: 'BANANE', price: 168 }); // weight line not read: 1,68 is the line total
+  add('2026-06-20', { name: 'BANANE', price: 137, qty: 1.04, unit: 'kg', unitPrice: 132 });
+  add('2026-06-20', { name: 'JOGURT', price: 69 });
+  const h = s.itemHistory();
+  assert.deepEqual(h.get('banane').entries.map((e) => e.price), [129, 132]);
+  assert.deepEqual(h.get('jogurt').entries.map((e) => e.price), [69], 'items sold by the piece are not affected');
+});
+
+test('a weight line whose price of one kilo is at the end is a quantity, not a product', () => {
+  // As the phone's text reader gave them (Android CI): "1, 36" with a space, and no line total.
+  assert.deepEqual(parseReceipt('BANANE 1,68\n1,238 kg x 1, 36\nMLEKO 1,19'), [
+    { name: 'BANANE', price: 168, qty: 1.238, unit: 'kg', unitPrice: 136 }, { name: 'MLEKO', price: 119 }]);
+  assert.deepEqual(parseReceipt('PIŠČANČJE PRSI 12,24\n1,182 kg x 10,36\nKRUH 1,79'), [
+    { name: 'PIŠČANČJE PRSI', price: 1224, qty: 1.182, unit: 'kg', unitPrice: 1036 }, { name: 'KRUH', price: 179 }]);
+  assert.deepEqual(parseReceipt('2 kom x 0,59\nJOGURT 1,18'), [{ name: 'JOGURT', price: 118, qty: 2, unitPrice: 59 }]);
+});
+
+// ---- the day on the receipt ----
+test('the day of the purchase is read from the receipt', () => {
+  const T = '2026-11-28';
+  assert.equal(findDate('MERCATOR d.d.\nRačun št.: 01-1234-56\n30.05.2026 14:05\nMLEKO 1,19', T), '2026-05-30');
+  assert.equal(findDate('21.11.26 9:15', T), '2026-11-21');
+  assert.equal(findDate('Datum: 2026-11-21', T), '2026-11-21');
+  assert.equal(findDate('21 . 11 . 2026 10:02', T), '2026-11-21'); // spaces the reader adds
+  assert.equal(findDate('21,11,2026 10:02', T), '2026-11-21'); // a dot read as a comma
+  assert.equal(findDate('5/6/2026', T), '2026-06-05');
+  // The date next to a time is the purchase; a best-before date is never it.
+  assert.equal(findDate('Garancija do 30.12.2026\n20.11.2026\n21.11.2026 12:00', T), '2026-11-21');
+  assert.equal(findDate('Rok uporabe 22.11.2026', T), null);
+  // Prices, quantities and impossible or far-off days are not dates.
+  assert.equal(findDate('Mleko 1,15 2,30\n2 x 1,29 2,58\n1.234,56', T), null);
+  assert.equal(findDate('31.02.2026 10:00', T), null);
+  assert.equal(findDate('01.01.2020 10:00', T), null, 'too long ago');
+  assert.equal(findDate('30.11.2026 10:00', T), null, 'in two days');
+  assert.equal(findDate('29.11.2026', T), '2026-11-29', 'tomorrow is fine (time zones)');
+  assert.equal(findDate('MLEKO 1,19'), null);
 });

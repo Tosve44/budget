@@ -46,7 +46,7 @@ jobs:
       - name: Logic and golden tests
         run: flutter test test/golden_test.dart test/text_lines_test.dart test/category_icons_test.dart test/premium_test.dart
       - name: Screens on 12 phone sizes x 2 text sizes, and folding
-        run: flutter test test/screens_test.dart test/fold_test.dart
+        run: flutter test test/screens_test.dart test/fold_test.dart test/price_history_test.dart
       - name: Install PostgreSQL
         run: |
           sudo apt-get update -qq
@@ -68,11 +68,18 @@ jobs:
         run: |
           psql -h /tmp -p 54329 -U postgres -d budget_test -v ON_ERROR_STOP=1 -c "alter table public.categories drop column icon"
           flutter test test/sync_test.dart --plain-name 'category icons'
+      - name: Sync tests again on a database from before shop names on receipts
+        env:
+          SUPABASE_TEST_URL: http://localhost:54321
+          STORE_COLUMN: 'no'
+        run: |
+          psql -h /tmp -p 54329 -U postgres -d budget_test -v ON_ERROR_STOP=1 -c "alter table public.transactions drop column store"
+          flutter test test/sync_test.dart --plain-name 'the shop on a receipt'
 
   android-build:
     name: Android test app (built once)
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -80,6 +87,10 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          # Keep the downloaded Gradle and Kotlin parts for later runs on this branch too, so a
+          # build does not depend on Maven Central answering (it sometimes says "429 Too Many Requests").
+          cache-read-only: false
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -88,12 +99,24 @@ jobs:
       - run: flutter pub get
       - name: Build the test app
         run: |
-          for i in 1 2 3; do flutter build apk --debug -t integration_test/app_test.dart && break; echo "Retrying in 60 s"; sleep 60; done
-          test -f build/app/outputs/flutter-apk/app-debug.apk
+          # Maven Central sometimes turns GitHub's machines away for a few minutes ("429 Too Many
+          # Requests"), so each build is tried up to 6 times, waiting a little longer each time.
+          build() {
+            for i in 1 2 3 4 5 6; do
+              flutter build apk --debug -t "$1" && return 0
+              echo "Build failed (try $i); retrying in $((i * 60)) s"; sleep $((i * 60))
+            done
+            return 1
+          }
+          build integration_test/app_test.dart
+          mkdir -p apks && cp build/app/outputs/flutter-apk/app-debug.apk apks/app-debug.apk
+          # The six-months price tracking test (integration_test/price_test.dart), run by one job.
+          build integration_test/price_test.dart
+          cp build/app/outputs/flutter-apk/app-debug.apk apks/price-test.apk
       - uses: actions/upload-artifact@v4
         with:
           name: android-test-app
-          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          path: mobile/apks/
 
   android:
     name: Android ${{ matrix.android }} · ${{ matrix.name }}
@@ -150,6 +173,86 @@ jobs:
         if: always()
         with:
           name: android-${{ matrix.api }}-${{ strategy.job-index }}
+          path: mobile/device-test.log
+
+  prices-android:
+    name: Price tracking, 6 months of receipt photos · Android 15 (Pixel 8)
+    needs: [logic, android-build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - name: Allow the emulator to use the processor's virtualisation (KVM)
+        working-directory: .
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-test-app
+          path: mobile/test-app
+      - name: Start the emulator
+        run: bash tool/ci-android-emulator.sh 35 pixel_8
+      - name: Run on the emulator
+        run: bash tool/ci-android-test.sh 1.0 no device-test.log test-app/price-test.apk integration_test/price_test.dart
+      - name: Summary
+        if: always()
+        run: |
+          { echo "### Price tracking · Android 15 (Pixel 8)"; head -1 device-test.log 2>/dev/null;
+            grep -E "(PRICES|RESULT) " device-test.log 2>/dev/null | sed 's/^/    /';
+            grep -E "All tests passed|Some tests failed|\[E\]" device-test.log 2>/dev/null | tail -15; } >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prices-android
+          path: mobile/device-test.log
+
+  prices-iphone:
+    name: Price tracking, 6 months of receipt photos · iOS 26 (iPhone 17 Pro)
+    needs: logic
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Make the simulator
+        run: |
+          SIM="$(bash tool/ci-simulator.sh iPhone-17-Pro iOS-26)"
+          echo "SIM=$SIM" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIM" || true
+          if ! xcrun simctl bootstatus "$SIM" -b || ! xcrun simctl list devices | grep "$SIM" | grep -q Booted; then
+            xcrun simctl shutdown "$SIM" || true
+            xcrun simctl erase "$SIM"
+            xcrun simctl boot "$SIM"
+            xcrun simctl bootstatus "$SIM" -b
+          fi
+      - name: Run on the simulator
+        timeout-minutes: 70
+        run: |
+          set -o pipefail
+          { echo "Simulator: iPhone 17 Pro | $(xcrun simctl list devices | grep "$SIM" | head -1 | xargs) | Xcode $(xcodebuild -version | sed -n 1p)"; } | tee device-test.log
+          bash tool/ci-ios-test.sh "$SIM" device-test.log integration_test/price_test.dart
+      - name: Summary
+        if: always()
+        run: |
+          { echo "### Price tracking · iOS 26 (iPhone 17 Pro)"; head -1 device-test.log 2>/dev/null;
+            grep -E "(PRICES|RESULT) " device-test.log 2>/dev/null | sed 's/^/    /';
+            grep -E "All tests passed|Some tests failed|\[E\]" device-test.log 2>/dev/null | tail -15; } >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prices-iphone
           path: mobile/device-test.log
 
   iphone:

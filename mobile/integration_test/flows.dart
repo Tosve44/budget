@@ -7,6 +7,7 @@ import 'package:budget/core/money.dart';
 import 'package:budget/core/premium.dart';
 import 'package:budget/main.dart';
 import 'package:budget/platform/purchases.dart';
+import 'package:budget/platform/receipt_reader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -16,8 +17,10 @@ Future<AppModel> pumpApp(
   bool asMilica = false,
   Plan plan = Plan.full,
   FakePurchases? purchases,
+  ReceiptReader? reader,
+  DateTime Function()? now,
 }) async {
-  final model = AppModel.forTests(demo: demo, asMilica: asMilica, plan: plan, purchases: purchases);
+  final model = AppModel.forTests(demo: demo, asMilica: asMilica, plan: plan, purchases: purchases, reader: reader, now: now);
   await tester.pumpWidget(BudgetApp(model: model));
   await tester.pumpAndSettle();
   return model;
@@ -25,17 +28,31 @@ Future<AppModel> pumpApp(
 
 String eur(int cents) => Money.format(cents);
 
+/// The main vertical list of what is on top (a sheet or dialog covers the screen behind it,
+/// whose lists are still there).
+Finder topList() {
+  final vertical = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down);
+  final onTop = find.byElementPredicate(
+    (e) => e.widget is Scrollable && (e.widget as Scrollable).axisDirection == AxisDirection.down && (ModalRoute.of(e)?.isCurrent ?? true),
+  );
+  return onTop.evaluate().isNotEmpty ? onTop.first : vertical.first;
+}
+
 /// Scrolls the screen until [f] is built (long lists build only what is on screen).
 Future<void> reveal(WidgetTester tester, Finder f) async {
   if (f.evaluate().isEmpty) {
-    // Start from the top, then scroll down until it shows up.
-    final list = find.byType(Scrollable).first;
-    final position = tester.state<ScrollableState>(list).position;
-    if (position.pixels != 0) position.jumpTo(0);
+    // Start from the top, then scroll down until it shows up. Every list goes back to the top:
+    // the first one found can be the screen behind the one in front.
+    for (final e in find.byType(Scrollable).evaluate()) {
+      final position = (e as StatefulElement).state as ScrollableState;
+      if (position.position.hasPixels && position.position.pixels != position.position.minScrollExtent) {
+        position.position.jumpTo(position.position.minScrollExtent);
+      }
+    }
     await tester.pumpAndSettle();
   }
   for (var i = 0; i < 80 && f.evaluate().isEmpty; i++) {
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, -150));
+    await tester.drag(topList(), const Offset(0, -150));
     await tester.pumpAndSettle();
   }
   await tester.ensureVisible(f.first);
@@ -86,9 +103,18 @@ Future<void> typeInto(WidgetTester tester, String key, String text) async {
 /// Taps "Take photo" and waits until [done] shows. A tap can land while the screen is still
 /// moving or under a message on a slow phone; a person would tap again, and so does this.
 Future<void> scanReceipt(WidgetTester tester, Finder done) async {
+  // The keyboard (open for the amount) leaves less room, and the result may be below it.
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpAndSettle();
   for (var attempt = 0; attempt < 3; attempt++) {
     await tapKey(tester, 'scanReceipt');
     await waitFor(tester, done, timeout: const Duration(seconds: 20));
+    if (done.evaluate().isNotEmpty) return;
+    // The result can be off the screen (lists build only what is on it), or a slow phone is still
+    // reading (scrolling waits for that): look before tapping again, so a photo isn't read twice.
+    try {
+      await reveal(tester, done);
+    } catch (_) {}
     if (done.evaluate().isNotEmpty) return;
     debugPrint('scanReceipt: nothing read after tap ${attempt + 1}');
   }
@@ -120,6 +146,17 @@ String statText(WidgetTester tester, String label) {
 }
 
 /// Every flow, with a short name. Each one starts the app fresh.
+/// Taps "New category" on the add screen until its form opens. The keyboard (opened for the
+/// amount) can move the chip while it is tapped; a person would tap again, and so does this.
+Future<void> openNewCategory(WidgetTester tester) async {
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpAndSettle();
+  for (var attempt = 0; attempt < 3 && find.byKey(const Key('categoryName')).evaluate().isEmpty; attempt++) {
+    await tapKey(tester, 'chip.new');
+    await waitFor(tester, find.byKey(const Key('categoryName')), timeout: const Duration(seconds: 5));
+  }
+}
+
 final flows = <String, Future<void> Function(WidgetTester)>{
   'tap Income opens the add form for income, and saving shows it': (tester) async {
     final model = await pumpApp(tester);
@@ -319,6 +356,55 @@ final flows = <String, Future<void> Function(WidgetTester)>{
     await reveal(tester, find.byKey(const Key('chipIcon.Pets')));
     expect(tester.widget<Text>(find.byKey(const Key('chipIcon.Pets')).first).data, '🏷️');
   },
+  'new category right from the add screen: what was typed stays, and it is picked': (tester) async {
+    final model = await pumpApp(tester);
+    await tapKey(tester, 'addExpense');
+    await typeInto(tester, 'amountField', '12');
+    await typeInto(tester, 'noteField', 'vet');
+    await openNewCategory(tester);
+    await typeInto(tester, 'categoryName', 'Dog');
+    await tapKey(tester, 'iconField');
+    await tapKey(tester, 'iconChoice.🐶');
+    await tapKey(tester, 'saveCategory');
+    final dog = model.store.data.categories.where((c) => c.name == 'Dog').single;
+    expect(dog.kind, EntryKind.expense);
+    expect(dog.icon, '🐶');
+    await reveal(tester, find.byKey(const Key('chip.Dog')));
+    expect(tester.widget<ChoiceChip>(find.byKey(const Key('chip.Dog'))).selected, isTrue, reason: 'picked for this entry');
+    await tapKey(tester, 'saveEntry');
+    final t = model.store.data.transactions.single;
+    expect((t.amount, t.categoryId, t.note), (1200, dog.id, 'vet'));
+    // The same name again (any case) picks the one that is there, even a hidden one.
+    model.store.updateCategory(dog.id, archived: true);
+    await tapKey(tester, 'addExpense');
+    await openNewCategory(tester);
+    await typeInto(tester, 'categoryName', ' dog ');
+    await tapKey(tester, 'saveCategory');
+    expect(model.store.data.categories.where((c) => c.name.toLowerCase() == 'dog').length, 1);
+    expect(model.store.category(dog.id)!.archived, isFalse, reason: 'shown again');
+    expect(tester.widget<ChoiceChip>(find.byKey(const Key('chip.Dog'))).selected, isTrue);
+    // Cancel keeps the form as it was, with nothing picked.
+    await openNewCategory(tester);
+    await tapKey(tester, 'cancelCategory');
+    expect(find.byKey(const Key('editorList')), findsOneWidget);
+  },
+  'free version: the new category chip leads to Premium': (tester) async {
+    final model = await pumpApp(tester, plan: Plan.free, purchases: FakePurchases());
+    await tapKey(tester, 'addExpense');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 3 && find.byKey(const Key('premiumScreen')).evaluate().isEmpty; attempt++) {
+      await tapKey(tester, 'chip.new');
+      await waitFor(tester, find.byKey(const Key('premiumScreen')), timeout: const Duration(seconds: 5));
+    }
+    await reveal(tester, find.byKey(const Key('premiumBecause')));
+    expect(find.byKey(const Key('premiumBecause')), findsOneWidget);
+    expect(find.byKey(const Key('categoryName')), findsNothing);
+    final before = model.store.data.categories.length;
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(model.store.data.categories.length, before);
+  },
   'free version: House, Prices and receipt photos lead to Premium; buying unlocks them': (tester) async {
     final store = FakePurchases();
     final model = await pumpApp(tester, demo: true, plan: Plan.free, purchases: store);
@@ -392,6 +478,32 @@ final flows = <String, Future<void> Function(WidgetTester)>{
     expect(model.plan, Plan.free);
     await reveal(tester, find.byKey(const Key('premiumMessage')));
     expect((tester.widget(find.byKey(const Key('premiumMessage'))) as Text).data, contains('cannot be reached'));
+  },
+  'the add screen closes with a swipe down; a short swipe keeps what was typed': (tester) async {
+    final model = await pumpApp(tester, demo: true);
+    final before = model.store.data.transactions.length;
+    await tapKey(tester, 'addExpense');
+    await typeInto(tester, 'amountField', '7,40');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    // The top bar of the sheet (with the drag handle above it).
+    final handle = find.byType(AppBar).last;
+    // A short, slow pull springs back.
+    await tester.drag(handle, const Offset(0, 60));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('editorList')), findsOneWidget);
+    await reveal(tester, find.byKey(const Key('amountField')));
+    expect(tester.widget<TextField>(find.byKey(const Key('amountField'))).controller!.text, '7,40');
+    // A real swipe down closes it, and nothing is saved.
+    await tester.fling(find.byType(AppBar).last, const Offset(0, 500), 1500);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('editorList')), findsNothing);
+    expect(model.store.data.transactions.length, before);
+    // Cancel still works too.
+    await tapKey(tester, 'addExpense');
+    await tester.tap(find.byTooltip('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('editorList')), findsNothing);
   },
   'who uses the phone, and the partner balance': (tester) async {
     final model = await pumpApp(tester);

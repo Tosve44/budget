@@ -7,8 +7,20 @@ import 'store.dart';
 class DraftLine {
   String name;
   String priceText;
-  DraftLine({this.name = '', this.priceText = ''});
-  DraftLine.of(ReceiptItem it) : name = it.name, priceText = Money.inputText(it.price, emptyForZero: false);
+
+  /// The receipt line as read (or as saved), with its quantity; null for a line typed by hand.
+  final ReceiptItem? read;
+  DraftLine({this.name = '', this.priceText = '', this.read});
+  DraftLine.of(ReceiptItem it) : name = it.name, priceText = Money.inputText(it.price, emptyForZero: false), read = it;
+
+  /// The line as it is now. A quantity stays; a corrected price drops the printed price of one.
+  ReceiptItem? item({int? maxName}) {
+    final p = Money.cents(priceText);
+    if (p == null) return null;
+    final n = maxName == null ? name.trim() : Limits.clip(name.trim(), maxName);
+    final r = read;
+    return r == null ? ReceiptItem(name: n, price: p) : r.copyWith(name: n, price: p);
+  }
 }
 
 class DraftProblem implements Exception {
@@ -28,12 +40,18 @@ class DraftProblem implements Exception {
 
 /// How a receipt line compares with the last time the same item was bought.
 class Comparison {
-  /// 'new', 'same', 'up' or 'down'.
+  /// 'new', 'same', 'up' or 'down'; 'misread' when the quantity line doesn't add up to the price.
   final String kind;
   final double percent;
   final int before;
   final String date;
-  const Comparison(this.kind, {this.percent = 0, this.before = 0, this.date = ''});
+
+  /// [before] is a price per kilo.
+  final bool perKg;
+
+  /// The shop of [before] when it is not the shop of this receipt (never bought here yet).
+  final String elsewhere;
+  const Comparison(this.kind, {this.percent = 0, this.before = 0, this.date = '', this.perKg = false, this.elsewhere = ''});
 }
 
 class CheckedEntry {
@@ -56,6 +74,9 @@ class EntryDraft {
   List<DraftLine> lines;
   String? receiptId;
 
+  /// The shop, read from the receipt or typed.
+  String store = '';
+
   EntryDraft({required this.spaceId, this.kind = EntryKind.expense, this.categoryId, required this.date})
     : amountText = '',
       note = '',
@@ -70,7 +91,8 @@ class EntryDraft {
       date = t.date,
       note = t.note,
       lines = (t.items ?? []).map(DraftLine.of).toList(),
-      receiptId = t.receiptId;
+      receiptId = t.receiptId,
+      store = t.store;
 
   /// Receipt lines that have a name; a named line without a readable price is a problem.
   List<ReceiptItem> items() {
@@ -80,7 +102,7 @@ class EntryDraft {
       if (name.isEmpty) continue;
       final p = Money.cents(l.priceText);
       if (p == null || p < 0 || p > Limits.maxCents) throw DraftProblem.itemPrice(name);
-      out.add(ReceiptItem(name: Limits.clip(name, Limits.itemName), price: p));
+      out.add(l.item(maxName: Limits.itemName)!);
     }
     return out;
   }
@@ -116,6 +138,7 @@ class EntryDraft {
         t.note = note.trim();
         t.items = ok.items;
         t.receiptId = rid;
+        if (kind == EntryKind.expense) t.store = this.store.trim();
       });
       return store.data.transactions.firstWhere((t) => t.id == id);
     }
@@ -128,16 +151,32 @@ class EntryDraft {
       note: note.trim(),
       items: ok.items,
       receiptId: rid,
+      store: kind == EntryKind.expense ? this.store.trim() : '',
     );
   }
 
   /// Fills in the receipt lines from the text read off a photo, and the amount from the printed
   /// total (SKUPAJ / ZA PLAČILO), or the sum of the lines when no total was found.
   /// Returns how many lines were found.
-  int applyReceiptText(String text) {
+  /// Set when the date was picked by hand; then a receipt does not change it.
+  bool dateTouched = false;
+
+  /// After reading a receipt: the day it was printed on, when that changed the date.
+  String? dateFromReceipt;
+
+  int applyReceiptText(String text, {DateTime? today}) {
     final found = ReceiptParser.parse(text);
     if (found.isNotEmpty) lines = found.map(DraftLine.of).toList();
     final total = ReceiptParser.findTotal(text);
+    final shop = ReceiptParser.findStore(text);
+    if (shop != null && store.trim().isEmpty) store = shop;
+    // A date picked by hand wins over the one on the receipt.
+    final day = ReceiptParser.findDate(text, today: today);
+    dateFromReceipt = day != null && !dateTouched && day != date ? day : null;
+    if (dateFromReceipt != null) date = dateFromReceipt!;
+    final sum = found.fold(0, (s, it) => s + it.price);
+    // A misread digit (5 as 9, 1 as 7) would show up later as a fake price jump.
+    mismatch = total != null && found.isNotEmpty && total != sum ? (sum, total) : null;
     if (total != null) {
       amountText = Money.inputText(total, emptyForZero: false);
     } else if (found.isNotEmpty && Money.cents(amountText) == null) {
@@ -146,15 +185,23 @@ class EntryDraft {
     return found.length;
   }
 
+  /// After reading a receipt: (items add up to, printed total) when they differ.
+  (int, int)? mismatch;
+
   int get linesTotal => lines.map((l) => Money.cents(l.priceText) ?? 0).fold(0, (a, b) => a + b);
 
   Comparison? comparison(DraftLine line, BudgetStore store) {
-    final price = Money.cents(line.priceText);
-    if (price == null || line.name.trim().isEmpty) return null;
-    final prev = store.previousPrice(line.name, date, excluding: existingId);
-    if (prev == null) return const Comparison('new');
+    final it = line.item();
+    if (it == null || line.name.trim().isEmpty) return null;
+    final price = it.perUnit;
+    if (price == null) return const Comparison('misread');
+    final shop = this.store.trim();
+    final prev = store.previousPrice(line.name, date, excluding: existingId, store: shop);
+    if (prev == null) return Comparison('new', perKg: it.unit == 'kg');
     final pct = Money.percentChange(price, prev.price);
-    if (pct == null || pct == 0) return Comparison('same', before: prev.price, date: prev.date);
-    return Comparison(pct > 0 ? 'up' : 'down', percent: pct, before: prev.price, date: prev.date);
+    final kg = prev.unit == 'kg';
+    final elsewhere = prev.store.isNotEmpty && shop.isNotEmpty && !PriceHistory.sameStore(prev.store, shop) ? prev.store : '';
+    if (pct == null || pct == 0) return Comparison('same', before: prev.price, date: prev.date, perKg: kg, elsewhere: elsewhere);
+    return Comparison(pct > 0 ? 'up' : 'down', percent: pct, before: prev.price, date: prev.date, perKg: kg, elsewhere: elsewhere);
   }
 }
