@@ -103,9 +103,18 @@ Future<void> typeInto(WidgetTester tester, String key, String text) async {
 /// Taps "Take photo" and waits until [done] shows. A tap can land while the screen is still
 /// moving or under a message on a slow phone; a person would tap again, and so does this.
 Future<void> scanReceipt(WidgetTester tester, Finder done) async {
+  // The keyboard (open for the amount) leaves less room, and the result may be below it.
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpAndSettle();
   for (var attempt = 0; attempt < 3; attempt++) {
     await tapKey(tester, 'scanReceipt');
     await waitFor(tester, done, timeout: const Duration(seconds: 20));
+    if (done.evaluate().isNotEmpty) return;
+    // The result can be off the screen (lists build only what is on it), or a slow phone is still
+    // reading (scrolling waits for that): look before tapping again, so a photo isn't read twice.
+    try {
+      await reveal(tester, done);
+    } catch (_) {}
     if (done.evaluate().isNotEmpty) return;
     debugPrint('scanReceipt: nothing read after tap ${attempt + 1}');
   }
